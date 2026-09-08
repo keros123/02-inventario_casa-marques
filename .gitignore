@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+public/uploads/inventario/*
+!public/uploads/inventario/.gitkeep
+public/uploads/dar-baja/*
+!public/uploads/dar-baja/.gitkeep

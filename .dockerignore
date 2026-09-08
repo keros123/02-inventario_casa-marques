@@ -1,0 +1,15 @@
+.git
+.cursor
+.vscode
+.env
+.env.*
+!.env.example
+*.md
+agent-transcripts
+terminals
+**/__pycache__
+*.log
+public/uploads/inventario/*
+!public/uploads/inventario/.gitkeep
+public/uploads/dar-baja/*
+!public/uploads/dar-baja/.gitkeep

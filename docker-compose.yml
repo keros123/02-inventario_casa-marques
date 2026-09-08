@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    image: inventario-casa-marques:local
+    ports:
+      - "8080:80"
+    env_file:
+      - .env
+    environment:
+      PORT: "80"
+      DB_DRIVER: pgsql
+      DB_SSLMODE: require
+    volumes:
+      - inventario_uploads:/var/www/html/public/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  inventario_uploads:
