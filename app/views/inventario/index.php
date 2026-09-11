@@ -36,13 +36,29 @@
 $busqueda = $busqueda ?? '';
 $categoriaId = $categoriaId ?? null;
 $items = $items ?? [];
+$page = max(1, (int) ($page ?? 1));
+$totalPages = max(1, (int) ($totalPages ?? 1));
+$total = (int) ($total ?? count($items));
+$from = (int) ($from ?? ($items ? 1 : 0));
+$to = (int) ($to ?? count($items));
 $exportParams = [];
+$listParams = [];
 if ($busqueda !== '') {
     $exportParams['q'] = $busqueda;
+    $listParams['q'] = $busqueda;
 }
 if ($categoriaId) {
     $exportParams['categoria'] = $categoriaId;
+    $listParams['categoria'] = $categoriaId;
 }
+$pageUrl = static function (int $p) use ($config, $listParams): string {
+    $params = $listParams;
+    if ($p > 1) {
+        $params['page'] = $p;
+    }
+    $query = $params ? '?' . http_build_query($params) : '';
+    return $config['base_url'] . '/inventario' . $query;
+};
 ?>
 
 <div class="card mb-3">
@@ -56,12 +72,12 @@ if ($categoriaId) {
             </div>
             <div class="col-md-3">
                 <label class="form-label mb-1">Categoría</label>
-                <select name="categoria" class="form-select form-select-sm">
+                <select name="categoria" class="form-select form-select-sm" onchange="this.form.submit()">
                     <option value="">Todas</option>
                     <?php foreach ($categorias as $cat): ?>
                     <option value="<?= (int) $cat['id_categoria'] ?>"
                         <?= $categoriaId === (int) $cat['id_categoria'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($cat['Nombre']) ?>
+                        <?= htmlspecialchars(CategoriaModel::formatLabel($cat['Nombre'] ?? '', $cat['Indicador'] ?? null)) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
@@ -96,12 +112,13 @@ if ($categoriaId) {
 <div class="card">
     <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
         <strong><i class="bi bi-box-seam"></i> Inventario</strong>
-        <span class="badge bg-secondary"><?= count($items) ?> elemento(s)</span>
+        <span class="badge bg-secondary"><?= $from ?>–<?= $to ?> de <?= $total ?></span>
     </div>
     <div class="table-responsive">
-        <table class="table table-hover mb-0 align-middle">
+        <table class="table table-hover table-inventario mb-0 align-middle">
             <thead>
                 <tr>
+                    <th class="col-num">#</th>
                     <th class="photo-col">Foto</th>
                     <th>Código</th>
                     <th>Elemento</th>
@@ -114,9 +131,11 @@ if ($categoriaId) {
                 </tr>
             </thead>
             <tbody>
+                <?php $numero = $from; ?>
                 <?php foreach ($items as $item): ?>
                 <?php $foto = trim($item['Fotografia'] ?? ''); $fotoUrl = App::fileUrl($foto); ?>
                 <tr>
+                    <td class="col-num text-muted"><?= $numero++ ?></td>
                     <td class="photo-cell">
                         <?php if ($fotoUrl !== ''): ?>
                         <button type="button" class="photo-thumb-btn photo-thumb-wrap"
@@ -140,7 +159,16 @@ if ($categoriaId) {
                         <br><small class="text-muted"><?= htmlspecialchars($item['Descripcion']) ?></small>
                         <?php endif; ?>
                     </td>
-                    <td><?= htmlspecialchars($item['Categoria'] ?? 'Sin categoría') ?></td>
+                    <td>
+                        <?= htmlspecialchars($item['Categoria'] ?? 'Sin categoría') ?>
+                        <?php
+                        $indCat = trim((string) ($item['Categoria_indicador'] ?? ''));
+                        if ($indCat === 'Consumible'): ?>
+                        <span class="badge bg-warning text-dark ms-1">Consumible</span>
+                        <?php elseif ($indCat === 'No Consumible'): ?>
+                        <span class="badge bg-info ms-1">No Consumible</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= (int) $item['Cantidad'] ?></td>
                     <td>
                         <span class="badge bg-<?= $item['Estado'] === 'Activo' ? 'success' : 'secondary' ?>">
@@ -166,6 +194,49 @@ if ($categoriaId) {
                 <?php endforeach; ?>
             </tbody>
         </table>
+    </div>
+    <div class="card-footer bg-white d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+        <span class="small text-muted">
+            Mostrando <?= $from ?> a <?= $to ?> de <?= $total ?> elemento(s)
+        </span>
+        <?php if ($totalPages > 1): ?>
+        <nav aria-label="Paginación del inventario">
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item<?= $page <= 1 ? ' disabled' : '' ?>">
+                    <a class="page-link" href="<?= $page <= 1 ? '#' : htmlspecialchars($pageUrl($page - 1)) ?>"
+                       <?= $page <= 1 ? 'tabindex="-1" aria-disabled="true"' : '' ?>>Anterior</a>
+                </li>
+                <?php
+                $startPage = max(1, $page - 2);
+                $endPage = min($totalPages, $startPage + 4);
+                $startPage = max(1, $endPage - 4);
+                if ($startPage > 1): ?>
+                <li class="page-item">
+                    <a class="page-link" href="<?= htmlspecialchars($pageUrl(1)) ?>">1</a>
+                </li>
+                <?php if ($startPage > 2): ?>
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                <?php endif; endif;
+                for ($p = $startPage; $p <= $endPage; $p++): ?>
+                <li class="page-item<?= $p === $page ? ' active' : '' ?>">
+                    <a class="page-link" href="<?= htmlspecialchars($pageUrl($p)) ?>"><?= $p ?></a>
+                </li>
+                <?php endfor;
+                if ($endPage < $totalPages): ?>
+                <?php if ($endPage < $totalPages - 1): ?>
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                <?php endif; ?>
+                <li class="page-item">
+                    <a class="page-link" href="<?= htmlspecialchars($pageUrl($totalPages)) ?>"><?= $totalPages ?></a>
+                </li>
+                <?php endif; ?>
+                <li class="page-item<?= $page >= $totalPages ? ' disabled' : '' ?>">
+                    <a class="page-link" href="<?= $page >= $totalPages ? '#' : htmlspecialchars($pageUrl($page + 1)) ?>"
+                       <?= $page >= $totalPages ? 'tabindex="-1" aria-disabled="true"' : '' ?>>Siguiente</a>
+                </li>
+            </ul>
+        </nav>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>

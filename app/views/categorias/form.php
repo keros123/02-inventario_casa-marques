@@ -1,11 +1,16 @@
 <?php
 $isEdit = ($action ?? '') === 'update';
+$esDefault = !empty($esDefault);
 $val = function ($key, $default = '') use ($item) {
     if (is_array($item)) {
         return htmlspecialchars($item[$key] ?? $item[strtolower($key)] ?? $default);
     }
     return htmlspecialchars($default);
 };
+$indicadorActual = '';
+if (is_array($item)) {
+    $indicadorActual = (string) ($item['Indicador'] ?? $item['indicador'] ?? '');
+}
 ?>
 
 <div class="page-header">
@@ -29,18 +34,30 @@ $val = function ($key, $default = '') use ($item) {
 
 <div class="card">
     <div class="card-body">
-        <form method="POST" action="<?= $config['base_url'] ?>/categorias/<?= $isEdit ? 'update' : 'store' ?>">
+        <form method="POST" action="<?= $config['base_url'] ?>/categorias/<?= $isEdit ? 'update' : 'store' ?>" id="formCategoria">
             <?php if ($isEdit): ?>
             <input type="hidden" name="id_original" value="<?= $val('id_categoria') ?>">
             <?php endif; ?>
 
             <div class="row g-3">
-                <div class="col-md-8">
+                <div class="col-md-5">
                     <label class="form-label">Nombre *</label>
-                    <input type="text" name="nombre" class="form-control"
-                           value="<?= $val('Nombre') ?>" required>
+                    <input type="text" name="nombre" id="nombreCategoria" class="form-control"
+                           value="<?= $val('Nombre') ?>" <?= $esDefault ? 'readonly' : 'required' ?>>
+                    <?php if ($esDefault): ?>
+                    <div class="form-text">Categoría por defecto del sistema. No se puede renombrar ni eliminar.</div>
+                    <?php endif; ?>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4" id="wrapIndicador" <?= $esDefault ? 'hidden' : '' ?>>
+                    <label class="form-label">Indicador *</label>
+                    <select name="indicador" id="indicadorCategoria" class="form-select" <?= $esDefault ? 'disabled' : 'required' ?>>
+                        <option value="">Seleccione…</option>
+                        <option value="Consumible" <?= $indicadorActual === 'Consumible' ? 'selected' : '' ?>>Consumible</option>
+                        <option value="No Consumible" <?= $indicadorActual === 'No Consumible' ? 'selected' : '' ?>>No Consumible</option>
+                    </select>
+                    <div class="form-text">Obligatorio en todas las categorías excepto General.</div>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Estado</label>
                     <select name="estado" class="form-select">
                         <option value="Activo" <?= $val('Estado', 'Activo') === 'Activo' ? 'selected' : '' ?>>Activo</option>
@@ -48,6 +65,12 @@ $val = function ($key, $default = '') use ($item) {
                     </select>
                 </div>
             </div>
+
+            <?php if ($esDefault): ?>
+            <p class="text-muted small mt-3 mb-0">
+                La categoría <strong>General</strong> no usa el indicador Consumible / No Consumible.
+            </p>
+            <?php endif; ?>
 
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">
@@ -58,3 +81,23 @@ $val = function ($key, $default = '') use ($item) {
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const nombre = document.getElementById('nombreCategoria');
+    const wrap = document.getElementById('wrapIndicador');
+    const indicador = document.getElementById('indicadorCategoria');
+    const locked = <?= $esDefault ? 'true' : 'false' ?>;
+    if (!nombre || !wrap || !indicador || locked) {
+        return;
+    }
+    function toggle() {
+        const esGeneral = nombre.value.trim().toLowerCase() === 'general';
+        wrap.hidden = esGeneral;
+        indicador.disabled = esGeneral;
+        indicador.required = !esGeneral;
+    }
+    nombre.addEventListener('input', toggle);
+    toggle();
+});
+</script>

@@ -27,12 +27,14 @@ class MovimientosController extends Controller
 
     public function ingreso(): void
     {
+        $categorias = $this->categoriaModel->getActivas();
         $this->view('movimientos/ingreso', [
-            'pageTitle'    => 'Ingreso de inventario',
-            'elementos'    => $this->inventarioModel->getActivos(),
-            'categorias'   => $this->categoriaModel->getActivas(),
-            'form'         => $this->defaultIngresoFormData(),
-            'errors'       => [],
+            'pageTitle'              => 'Ingreso de inventario',
+            'elementos'              => $this->inventarioModel->getActivos(),
+            'categorias'             => $categorias,
+            'siguientesPorCategoria' => $this->inventarioModel->getSiguientesCodigos($categorias),
+            'form'                   => $this->defaultIngresoFormData(),
+            'errors'                 => [],
         ]);
     }
 
@@ -52,12 +54,14 @@ class MovimientosController extends Controller
         }
 
         if ($errors) {
+            $categorias = $this->categoriaModel->getActivas();
             $this->view('movimientos/ingreso', [
-                'pageTitle'    => 'Ingreso de inventario',
-                'elementos'    => $this->inventarioModel->getActivos(),
-                'categorias'   => $this->categoriaModel->getActivas(),
-                'form'         => $form,
-                'errors'       => $errors,
+                'pageTitle'              => 'Ingreso de inventario',
+                'elementos'              => $this->inventarioModel->getActivos(),
+                'categorias'             => $categorias,
+                'siguientesPorCategoria' => $this->inventarioModel->getSiguientesCodigos($categorias),
+                'form'                   => $form,
+                'errors'                 => $errors,
             ]);
             return;
         }
@@ -70,12 +74,14 @@ class MovimientosController extends Controller
             $this->setFlash('success', 'Ingreso registrado. Cantidad actualizada en inventario.');
             $this->redirect('/movimientos/ingreso/documento?id=' . $lastId);
         } catch (RuntimeException $e) {
+            $categorias = $this->categoriaModel->getActivas();
             $this->view('movimientos/ingreso', [
-                'pageTitle'    => 'Ingreso de inventario',
-                'elementos'    => $this->inventarioModel->getActivos(),
-                'categorias'   => $this->categoriaModel->getActivas(),
-                'form'         => $form,
-                'errors'       => [$e->getMessage()],
+                'pageTitle'              => 'Ingreso de inventario',
+                'elementos'              => $this->inventarioModel->getActivos(),
+                'categorias'             => $categorias,
+                'siguientesPorCategoria' => $this->inventarioModel->getSiguientesCodigos($categorias),
+                'form'                   => $form,
+                'errors'                 => [$e->getMessage()],
             ]);
         }
     }
@@ -655,6 +661,16 @@ class MovimientosController extends Controller
             $codigo = trim($row['codigo'] ?? '');
             $cantidad = (int) ($row['cantidad'] ?? 0);
             $esNuevo = !empty($row['nuevo']);
+            $idCategoriaNuevo = (int) ($row['categoria_nuevo'] ?? 0) ?: $this->categoriaModel->getDefaultId();
+
+            if ($esNuevo && ($codigo === '' || isset($codigosVistos[$codigo]) || $this->inventarioModel->findByCodigo($codigo))) {
+                $categoria = $this->categoriaModel->findById($idCategoriaNuevo);
+                $codigo = $this->inventarioModel->suggestNextCodigo(
+                    $idCategoriaNuevo,
+                    (string) ($categoria['Nombre'] ?? ''),
+                    array_keys($codigosVistos)
+                );
+            }
 
             if ($codigo === '' && $cantidad === 0) {
                 continue;
@@ -687,7 +703,7 @@ class MovimientosController extends Controller
                     'nuevo'    => [
                         'codigo'       => $codigo,
                         'elemento'     => $row['elemento_nuevo'] ?? $row['elemento'] ?? '',
-                        'id_categoria' => (int) ($row['categoria_nuevo'] ?? 0) ?: $this->categoriaModel->getDefaultId(),
+                        'id_categoria' => $idCategoriaNuevo,
                         'descripcion'  => $row['descripcion_nuevo'] ?? '',
                     ],
                 ];

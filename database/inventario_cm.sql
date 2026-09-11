@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS casa_marques_Usuarios (
 CREATE TABLE IF NOT EXISTS casa_marques_Categorias (
     id_categoria INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     Nombre VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+    Indicador VARCHAR(20) DEFAULT NULL,
     Estado ENUM('Activo', 'Inactivo', 'Eliminado') NOT NULL DEFAULT 'Activo'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

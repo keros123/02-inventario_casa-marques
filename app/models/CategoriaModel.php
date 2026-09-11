@@ -4,6 +4,52 @@ require_once __DIR__ . '/../core/Model.php';
 
 class CategoriaModel extends Model
 {
+    public const DEFAULT_NOMBRE = 'General';
+    public const INDICADORES = ['Consumible', 'No Consumible'];
+
+    public static function isDefaultNombre(string $nombre): bool
+    {
+        return strcasecmp(trim($nombre), self::DEFAULT_NOMBRE) === 0;
+    }
+
+    public static function isDefault(array $cat): bool
+    {
+        return self::isDefaultNombre((string) ($cat['Nombre'] ?? $cat['nombre'] ?? ''));
+    }
+
+    public static function formatLabel(?string $nombre, ?string $indicador = null): string
+    {
+        $nombre = trim((string) $nombre);
+        if ($nombre === '') {
+            return 'Sin categoría';
+        }
+        $indicador = trim((string) $indicador);
+        if ($indicador === '' || self::isDefaultNombre($nombre)) {
+            return $nombre;
+        }
+        return $nombre . ' · ' . $indicador;
+    }
+
+    public static function normalizeIndicador(?string $value): ?string
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+        $norm = mb_strtolower($raw, 'UTF-8');
+        $norm = strtr($norm, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u',
+        ]);
+        $norm = preg_replace('/[\s_\-]+/', '', $norm) ?? $norm;
+        if ($norm === 'consumible') {
+            return 'Consumible';
+        }
+        if (in_array($norm, ['noconsumible', 'noesconsumible'], true)) {
+            return 'No Consumible';
+        }
+        return in_array($raw, self::INDICADORES, true) ? $raw : null;
+    }
+
     public function getAll(bool $includeDeleted = false): array
     {
         $sql = 'SELECT * FROM ' . $this->t('Categorias');
@@ -17,7 +63,7 @@ class CategoriaModel extends Model
     public function getActivas(): array
     {
         $stmt = $this->db->query(
-            'SELECT id_categoria, Nombre FROM ' . $this->t('Categorias') . ' WHERE Estado = \'Activo\' ORDER BY Nombre ASC'
+            'SELECT id_categoria, Nombre, Indicador FROM ' . $this->t('Categorias') . ' WHERE Estado = \'Activo\' ORDER BY Nombre ASC'
         );
         return $stmt->fetchAll();
     }
@@ -32,26 +78,31 @@ class CategoriaModel extends Model
         return $row ?: null;
     }
 
-    public function ensureByNombre(string $nombre): ?array
+    public function ensureByNombre(string $nombre, ?string $indicador = null): ?array
     {
         $nombre = trim($nombre);
         if ($nombre === '') {
-            $nombre = 'General';
+            $nombre = self::DEFAULT_NOMBRE;
         }
 
         $row = $this->findByNombre($nombre);
         if ($row) {
             if (($row['Estado'] ?? '') === 'Eliminado') {
                 $this->update((int) $row['id_categoria'], [
-                    'nombre' => $row['Nombre'],
-                    'estado' => 'Activo',
+                    'nombre'     => $row['Nombre'],
+                    'estado'     => 'Activo',
+                    'indicador'  => self::isDefault($row) ? null : ($row['Indicador'] ?? $indicador),
                 ]);
-                $row['Estado'] = 'Activo';
+                $row = $this->findByNombre($nombre);
             }
-            return $row;
+            return $row ?: null;
         }
 
-        $this->create(['nombre' => $nombre, 'estado' => 'Activo']);
+        $this->create([
+            'nombre'    => $nombre,
+            'estado'    => 'Activo',
+            'indicador' => self::isDefaultNombre($nombre) ? null : $indicador,
+        ]);
         return $this->findByNombre($nombre);
     }
 
@@ -66,23 +117,27 @@ class CategoriaModel extends Model
     public function create(array $data): bool
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO ' . $this->t('Categorias') . ' (Nombre, Estado) VALUES (:nombre, :estado)'
+            'INSERT INTO ' . $this->t('Categorias') . ' (Nombre, Indicador, Estado) VALUES (:nombre, :indicador, :estado)'
         );
         return $stmt->execute([
-            'nombre' => $data['nombre'],
-            'estado' => $data['estado'] ?? 'Activo',
+            'nombre'    => $data['nombre'],
+            'indicador' => self::isDefaultNombre((string) $data['nombre']) ? null : ($data['indicador'] ?? null),
+            'estado'    => $data['estado'] ?? 'Activo',
         ]);
     }
 
     public function update(int $id, array $data): bool
     {
         $stmt = $this->db->prepare(
-            'UPDATE ' . $this->t('Categorias') . ' SET Nombre = :nombre, Estado = :estado WHERE id_categoria = :id'
+            'UPDATE ' . $this->t('Categorias')
+            . ' SET Nombre = :nombre, Indicador = :indicador, Estado = :estado WHERE id_categoria = :id'
         );
+        $nombre = (string) $data['nombre'];
         return $stmt->execute([
-            'nombre' => $data['nombre'],
-            'estado' => $data['estado'],
-            'id'     => $id,
+            'nombre'    => $nombre,
+            'indicador' => self::isDefaultNombre($nombre) ? null : ($data['indicador'] ?? null),
+            'estado'    => $data['estado'],
+            'id'        => $id,
         ]);
     }
 
@@ -105,10 +160,19 @@ class CategoriaModel extends Model
 
     public function getDefaultId(): int
     {
-        $stmt = $this->db->query(
-            'SELECT id_categoria FROM ' . $this->t('Categorias') . ' WHERE Estado = \'Activo\' ORDER BY id_categoria LIMIT 1'
+        $stmt = $this->db->prepare(
+            'SELECT id_categoria FROM ' . $this->t('Categorias')
+            . ' WHERE Estado = \'Activo\' AND LOWER(Nombre) = LOWER(:nombre) ORDER BY id_categoria LIMIT 1'
         );
+        $stmt->execute(['nombre' => self::DEFAULT_NOMBRE]);
         $id = $stmt->fetchColumn();
-        return $id ? (int) $id : 1;
+        if ($id) {
+            return (int) $id;
+        }
+
+        $fallback = $this->db->query(
+            'SELECT id_categoria FROM ' . $this->t('Categorias') . ' WHERE Estado = \'Activo\' ORDER BY id_categoria LIMIT 1'
+        )->fetchColumn();
+        return $fallback ? (int) $fallback : 1;
     }
 }

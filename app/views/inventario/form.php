@@ -11,6 +11,21 @@ if (is_array($item)) {
     $fotografia = trim($item['Fotografia'] ?? $item['fotografia'] ?? '');
 }
 $previewUrl = $fotografia !== '' ? App::fileUrl($fotografia) : '';
+$siguientesPorCategoria = $siguientesPorCategoria ?? [];
+$selectedCatId = 0;
+if (is_array($item)) {
+    $selectedCatId = (int) ($item['id_categoria'] ?? $item['Id_categoria'] ?? 0);
+}
+if ($selectedCatId === 0 && !empty($categorias)) {
+    $selectedCatId = (int) $categorias[0]['id_categoria'];
+}
+$codigoActual = '';
+if (is_array($item)) {
+    $codigoActual = (string) ($item['Codigo'] ?? $item['codigo'] ?? '');
+}
+if (!$isEdit && $codigoActual === '') {
+    $codigoActual = (string) ($siguientesPorCategoria[$selectedCatId] ?? '');
+}
 ?>
 
 <div class="page-header">
@@ -36,7 +51,10 @@ $previewUrl = $fotografia !== '' ? App::fileUrl($fotografia) : '';
     <div class="card-body">
         <form method="POST"
               action="<?= $config['base_url'] ?>/inventario/<?= $isEdit ? 'update' : 'store' ?>"
-              enctype="multipart/form-data">
+              enctype="multipart/form-data"
+              id="formInventario"
+              <?= $isEdit ? 'data-edit="1"' : '' ?>
+              data-siguientes="<?= htmlspecialchars(json_encode($siguientesPorCategoria, JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>">
             <?php if ($isEdit): ?>
             <input type="hidden" name="codigo_original" value="<?= $val('Codigo') ?>">
             <?php endif; ?>
@@ -45,25 +63,35 @@ $previewUrl = $fotografia !== '' ? App::fileUrl($fotografia) : '';
                 <div class="col-lg-9">
                     <div class="row g-3">
                         <div class="col-md-4">
+                            <label class="form-label">Categoría *</label>
+                            <select name="id_categoria" class="form-select" required>
+                                <?php foreach ($categorias as $cat): ?>
+                                <option value="<?= (int) $cat['id_categoria'] ?>"
+                                    <?= $selectedCatId === (int) $cat['id_categoria'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars(CategoriaModel::formatLabel($cat['Nombre'] ?? '', $cat['Indicador'] ?? null)) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Código *</label>
                             <input type="text" name="codigo" class="form-control"
-                                   value="<?= $val('Codigo') ?>" <?= $isEdit ? 'readonly' : 'required' ?>>
+                                   value="<?= htmlspecialchars($codigoActual) ?>" <?= $isEdit ? 'readonly' : 'required' ?>>
+                            <?php if (!$isEdit): ?>
+                            <small class="text-muted">Sugerido: primera letra de la categoría + consecutivo.</small>
+                            <?php endif; ?>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Estado</label>
+                            <select name="estado" class="form-select">
+                                <option value="Activo" <?= $val('Estado', 'Activo') === 'Activo' ? 'selected' : '' ?>>Activo</option>
+                                <option value="Inactivo" <?= $val('Estado') === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
+                            </select>
                         </div>
                         <div class="col-md-8">
                             <label class="form-label">Elemento *</label>
                             <input type="text" name="elemento" class="form-control"
                                    value="<?= $val('Elemento') ?>" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Categoría *</label>
-                            <select name="id_categoria" class="form-select" required>
-                                <?php foreach ($categorias as $cat): ?>
-                                <option value="<?= (int) $cat['id_categoria'] ?>"
-                                    <?= (int) ($item['id_categoria'] ?? $item['Id_categoria'] ?? 0) === (int) $cat['id_categoria'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($cat['Nombre']) ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Cantidad</label>
@@ -76,13 +104,6 @@ $previewUrl = $fotografia !== '' ? App::fileUrl($fotografia) : '';
                             <input type="number" class="form-control bg-light" value="0" readonly tabindex="-1">
                             <input type="hidden" name="cantidad" value="0">
                             <?php endif; ?>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Estado</label>
-                            <select name="estado" class="form-select">
-                                <option value="Activo" <?= $val('Estado', 'Activo') === 'Activo' ? 'selected' : '' ?>>Activo</option>
-                                <option value="Inactivo" <?= $val('Estado') === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                            </select>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Descripción</label>

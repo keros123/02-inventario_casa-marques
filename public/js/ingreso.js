@@ -53,12 +53,29 @@ document.addEventListener('DOMContentLoaded', function () {
         buscarElementos('');
     }
 
+    function reservadosEnGrilla() {
+        return codigosEnGrilla();
+    }
+
+    function aplicarCodigoSugerido() {
+        const select = document.getElementById('categoriaNuevoElemento');
+        const input = document.getElementById('codigoNuevoElemento');
+        if (!select || !input || !window.InventarioCodigo) {
+            return;
+        }
+        const mapa = window.ingresoData?.siguientes || {};
+        const sugerido = window.InventarioCodigo.deMapa(mapa, select.value, reservadosEnGrilla());
+        if (sugerido) {
+            input.value = sugerido;
+        }
+    }
+
     function resetCrearPanel() {
-        document.getElementById('codigoNuevoElemento').value = '';
         document.getElementById('nombreNuevoElemento').value = '';
         document.getElementById('descripcionNuevoElemento').value = '';
         document.getElementById('cantidadNuevoElemento').value = '1';
         ocultarAlerta(alertModalCrearElemento);
+        aplicarCodigoSugerido();
     }
 
     function mostrarPanelBuscar() {
@@ -172,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnIrCrearElemento').addEventListener('click', mostrarPanelCrear);
     document.getElementById('btnVolverBuscarElemento').addEventListener('click', mostrarPanelBuscar);
+    document.getElementById('categoriaNuevoElemento').addEventListener('change', aplicarCodigoSugerido);
 
     document.getElementById('btnConfirmarElemento').addEventListener('click', function () {
         agregarElementoExistente(elementoSeleccionado);

@@ -64,7 +64,7 @@ $queryBase = array_filter([
                     <?php foreach ($categorias as $cat): ?>
                     <option value="<?= (int) $cat['id_categoria'] ?>"
                         <?= (int) ($f['id_categoria'] ?? 0) === (int) $cat['id_categoria'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($cat['Nombre']) ?>
+                        <?= htmlspecialchars(CategoriaModel::formatLabel($cat['Nombre'] ?? '', $cat['Indicador'] ?? null)) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>

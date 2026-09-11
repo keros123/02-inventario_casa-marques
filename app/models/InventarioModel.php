@@ -4,14 +4,10 @@ require_once __DIR__ . '/../core/Model.php';
 
 class InventarioModel extends Model
 {
-    public function getAll(?string $busqueda = null, ?int $categoriaId = null): array
-    {
-        $sql = 'SELECT i.*, c.Nombre AS Categoria
-                FROM ' . $this->t('Inventario') . ' i
-                LEFT JOIN ' . $this->t('Categorias') . ' c ON c.id_categoria = i.id_categoria
-                WHERE i.Estado != \'Eliminado\'';
-        $params = [];
+    private ?array $codigoIndex = null;
 
+    private function applyFilters(string $sql, array $params, ?string $busqueda, ?int $categoriaId): array
+    {
         if ($busqueda !== null && $busqueda !== '') {
             $sql .= ' AND (i.Codigo LIKE :busqueda
                         OR i.Elemento LIKE :busqueda
@@ -25,7 +21,34 @@ class InventarioModel extends Model
             $params['categoria'] = $categoriaId;
         }
 
+        return [$sql, $params];
+    }
+
+    public function countAll(?string $busqueda = null, ?int $categoriaId = null): int
+    {
+        $sql = 'SELECT COUNT(*)
+                FROM ' . $this->t('Inventario') . ' i
+                LEFT JOIN ' . $this->t('Categorias') . ' c ON c.id_categoria = i.id_categoria
+                WHERE i.Estado != \'Eliminado\'';
+        [$sql, $params] = $this->applyFilters($sql, [], $busqueda, $categoriaId);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function getAll(?string $busqueda = null, ?int $categoriaId = null, ?int $limit = null, int $offset = 0): array
+    {
+        $sql = 'SELECT i.*, c.Nombre AS Categoria, c.Indicador AS Categoria_indicador
+                FROM ' . $this->t('Inventario') . ' i
+                LEFT JOIN ' . $this->t('Categorias') . ' c ON c.id_categoria = i.id_categoria
+                WHERE i.Estado != \'Eliminado\'';
+        [$sql, $params] = $this->applyFilters($sql, [], $busqueda, $categoriaId);
         $sql .= ' ORDER BY c.Nombre ASC, i.Elemento ASC';
+
+        if ($limit !== null) {
+            $sql .= ' LIMIT ' . max(0, (int) $limit) . ' OFFSET ' . max(0, (int) $offset);
+        }
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -45,10 +68,87 @@ class InventarioModel extends Model
         return $grouped;
     }
 
+    public static function letraCategoria(string $nombre): string
+    {
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            return 'X';
+        }
+
+        $letra = mb_strtoupper(mb_substr($nombre, 0, 1, 'UTF-8'), 'UTF-8');
+        $letra = strtr($letra, [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+        ]);
+
+        return preg_match('/^[A-Z]$/', $letra) ? $letra : 'X';
+    }
+
+    public function getSiguientesCodigos(array $categorias, array $reservados = []): array
+    {
+        $map = [];
+        foreach ($categorias as $cat) {
+            $id = (int) ($cat['id_categoria'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $map[$id] = $this->suggestNextCodigo($id, (string) ($cat['Nombre'] ?? ''), $reservados);
+        }
+
+        return $map;
+    }
+
+    public function suggestNextCodigo(int $categoriaId, string $nombreCategoria, array $reservados = []): string
+    {
+        $letra = self::letraCategoria($nombreCategoria);
+        $usados = [];
+        $max = 0;
+        $width = 5;
+
+        foreach ($this->codigoIndex() as $row) {
+            $codigo = strtoupper(trim((string) ($row['Codigo'] ?? '')));
+            if ($codigo === '') {
+                continue;
+            }
+            $usados[$codigo] = true;
+            if ((int) ($row['id_categoria'] ?? 0) !== $categoriaId) {
+                continue;
+            }
+            if (preg_match('/^' . preg_quote($letra, '/') . '(\d+)$/', $codigo, $m)) {
+                $max = max($max, (int) $m[1]);
+                $width = max($width, strlen($m[1]));
+            }
+        }
+
+        foreach ($reservados as $reservado) {
+            $codigo = strtoupper(trim((string) $reservado));
+            if ($codigo !== '') {
+                $usados[$codigo] = true;
+            }
+        }
+
+        $n = $max + 1;
+        do {
+            $codigo = $letra . str_pad((string) $n, $width, '0', STR_PAD_LEFT);
+            $n++;
+        } while (isset($usados[strtoupper($codigo)]));
+
+        return $codigo;
+    }
+
+    private function codigoIndex(): array
+    {
+        if ($this->codigoIndex === null) {
+            $stmt = $this->db->query('SELECT Codigo, id_categoria FROM ' . $this->t('Inventario'));
+            $this->codigoIndex = $stmt->fetchAll();
+        }
+
+        return $this->codigoIndex;
+    }
+
     public function findByCodigo(string $codigo): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT i.*, c.Nombre AS Categoria
+            'SELECT i.*, c.Nombre AS Categoria, c.Indicador AS Categoria_indicador
              FROM ' . $this->t('Inventario') . ' i
              LEFT JOIN ' . $this->t('Categorias') . ' c ON c.id_categoria = i.id_categoria
              WHERE i.Codigo = :codigo LIMIT 1'

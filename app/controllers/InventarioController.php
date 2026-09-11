@@ -23,16 +23,30 @@ class InventarioController extends Controller
     {
         $busqueda = trim($_GET['q'] ?? '');
         $categoriaId = (int) ($_GET['categoria'] ?? 0) ?: null;
+        $filtroBusqueda = $busqueda !== '' ? $busqueda : null;
+        $perPage = 20;
+        $total = $this->model->countAll($filtroBusqueda, $categoriaId);
+        $totalPages = max(1, (int) ceil($total / $perPage));
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = ($page - 1) * $perPage;
+        $items = $this->model->getAll($filtroBusqueda, $categoriaId, $perPage, $offset);
+        $from = $total === 0 ? 0 : $offset + 1;
+        $to = $total === 0 ? 0 : $offset + count($items);
 
         $this->view('inventario/index', [
             'pageTitle'  => 'Inventario',
-            'items'      => $this->model->getAll(
-                $busqueda !== '' ? $busqueda : null,
-                $categoriaId
-            ),
+            'items'      => $items,
             'categorias' => $this->categoriaModel->getActivas(),
             'busqueda'   => $busqueda,
             'categoriaId'=> $categoriaId,
+            'page'       => $page,
+            'totalPages' => $totalPages,
+            'total'      => $total,
+            'from'       => $from,
+            'to'         => $to,
             'flash'      => $this->getFlash(),
         ]);
     }
@@ -40,11 +54,36 @@ class InventarioController extends Controller
     public function create(): void
     {
         Auth::requireAdmin();
+        $categorias = $this->categoriaModel->getActivas();
         $this->view('inventario/form', [
-            'pageTitle'  => 'Nuevo elemento',
-            'item'       => null,
-            'action'     => 'store',
-            'categorias' => $this->categoriaModel->getActivas(),
+            'pageTitle'               => 'Nuevo elemento',
+            'item'                    => null,
+            'action'                  => 'store',
+            'categorias'              => $categorias,
+            'siguientesPorCategoria'  => $this->model->getSiguientesCodigos($categorias),
+        ]);
+    }
+
+    public function siguienteCodigo(): void
+    {
+        Auth::requireLogin();
+        $categoriaId = (int) ($_GET['categoria'] ?? 0);
+        $categoria = $categoriaId > 0 ? $this->categoriaModel->findById($categoriaId) : null;
+        if (!$categoria) {
+            $this->json(['error' => 'Categoría no válida.'], 400);
+        }
+
+        $reservados = array_filter(array_map('trim', explode(',', (string) ($_GET['reservados'] ?? ''))));
+        $codigo = $this->model->suggestNextCodigo(
+            $categoriaId,
+            (string) ($categoria['Nombre'] ?? ''),
+            $reservados
+        );
+
+        $this->json([
+            'codigo'      => $codigo,
+            'letra'       => InventarioModel::letraCategoria((string) ($categoria['Nombre'] ?? '')),
+            'categoria'   => (int) $categoria['id_categoria'],
         ]);
     }
 
@@ -53,9 +92,18 @@ class InventarioController extends Controller
         Auth::requireAdmin();
         $data = $this->getFormData();
         $data['cantidad'] = 0;
+        if ($data['codigo'] === '' && !empty($data['id_categoria'])) {
+            $categoria = $this->categoriaModel->findById((int) $data['id_categoria']);
+            if ($categoria) {
+                $data['codigo'] = $this->model->suggestNextCodigo(
+                    (int) $categoria['id_categoria'],
+                    (string) ($categoria['Nombre'] ?? '')
+                );
+            }
+        }
         $errors = $this->validate($data);
 
-        if ($this->model->findByCodigo($data['codigo'])) {
+        if ($data['codigo'] !== '' && $this->model->findByCodigo($data['codigo'])) {
             $errors[] = 'El código ya existe.';
         }
 
@@ -68,12 +116,14 @@ class InventarioController extends Controller
         }
 
         if ($errors) {
+            $categorias = $this->categoriaModel->getActivas();
             $this->view('inventario/form', [
-                'pageTitle'  => 'Nuevo elemento',
-                'item'       => $data,
-                'action'     => 'store',
-                'categorias' => $this->categoriaModel->getActivas(),
-                'errors'     => $errors,
+                'pageTitle'              => 'Nuevo elemento',
+                'item'                   => $data,
+                'action'                 => 'store',
+                'categorias'             => $categorias,
+                'siguientesPorCategoria' => $this->model->getSiguientesCodigos($categorias),
+                'errors'                 => $errors,
             ]);
             return;
         }
@@ -187,61 +237,35 @@ class InventarioController extends Controller
     public function plantilla(): void
     {
         Auth::requireAdmin();
-        $categorias = $this->categoriaModel->getActivas();
-        $grouped = $this->model->getGroupedByCategoria();
+        $items = $this->model->getAll();
         $saldos = $this->model->getSaldosIniciales();
 
-        $nombres = [];
-        foreach ($categorias as $cat) {
-            $nombre = trim((string) ($cat['Nombre'] ?? 'General'));
-            if ($nombre !== '') {
-                $nombres[$nombre] = true;
-            }
-        }
-        foreach (array_keys($grouped) as $nombre) {
-            $nombres[$nombre] = true;
-        }
-        if (empty($nombres)) {
-            $nombres['General'] = true;
-        }
-
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename=plantilla_inventario_categorias.csv');
+        header('Content-Disposition: attachment; filename=plantilla_inventario.csv');
 
         $output = fopen('php://output', 'w');
         fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-        fwrite($output, "# Plantilla de carga de inventario — Casa del Marqués\n");
-        fwrite($output, "# Una sección por categoría. Los elementos que ya existen aparecen con Existe=Si, saldo inicial y stock actual.\n");
-        fwrite($output, "# Agregue filas nuevas con Existe=No, Código, Elemento y SaldoInicial o Stock.\n");
-        fwrite($output, "# Si el código ya existe no se duplica: se identifican y se conservan el stock y los movimientos.\n");
-        fwrite($output, "# Estado permitido: Activo o Inactivo.\n");
-        fwrite($output, "#\n");
+        $headers = ['Categoria', 'Codigo', 'Elemento', 'Descripcion', 'Estado', 'SaldoInicial', 'Stock'];
+        fputcsv($output, $headers, ';');
 
-        $headers = ['Codigo', 'Elemento', 'Descripcion', 'Estado', 'SaldoInicial', 'Stock', 'Existe'];
+        foreach ($items as $item) {
+            $codigo = (string) ($item['Codigo'] ?? '');
+            $stock = (int) ($item['Cantidad'] ?? 0);
+            $saldo = $saldos[$codigo] ?? $stock;
+            fputcsv($output, [
+                $item['Categoria'] ?? 'General',
+                $codigo,
+                $item['Elemento'] ?? '',
+                $item['Descripcion'] ?? '',
+                $item['Estado'] ?? 'Activo',
+                $saldo,
+                $stock,
+            ], ';');
+        }
 
-        foreach (array_keys($nombres) as $nombre) {
-            fwrite($output, '# CATEGORIA: ' . $nombre . "\n");
-            fputcsv($output, $headers, ';');
-
-            foreach ($grouped[$nombre] ?? [] as $item) {
-                $codigo = (string) ($item['Codigo'] ?? '');
-                $stock = (int) ($item['Cantidad'] ?? 0);
-                $saldo = $saldos[$codigo] ?? $stock;
-                fputcsv($output, [
-                    $codigo,
-                    $item['Elemento'] ?? '',
-                    $item['Descripcion'] ?? '',
-                    $item['Estado'] ?? 'Activo',
-                    $saldo,
-                    $stock,
-                    'Si',
-                ], ';');
-            }
-
-            fputcsv($output, ['', '', '', 'Activo', '', '', 'No'], ';');
-            fputcsv($output, ['', '', '', 'Activo', '', '', 'No'], ';');
-            fwrite($output, "\n");
+        for ($i = 0; $i < 8; $i++) {
+            fputcsv($output, ['', '', '', '', '', '', ''], ';');
         }
 
         fclose($output);
@@ -252,10 +276,11 @@ class InventarioController extends Controller
     {
         Auth::requireAdmin();
         $this->view('inventario/cargar', [
-            'pageTitle'  => 'Cargar inventario',
-            'categorias' => $this->categoriaModel->getActivas(),
-            'flash'      => $this->getFlash(),
-            'errors'     => [],
+            'pageTitle'   => 'Cargar inventario',
+            'categorias'  => $this->categoriaModel->getActivas(),
+            'flash'       => $this->getFlash(),
+            'errors'      => [],
+            'pendientes'  => $this->getCargaPendientes(),
         ]);
     }
 
@@ -286,6 +311,7 @@ class InventarioController extends Controller
                 'categorias' => $this->categoriaModel->getActivas(),
                 'flash'      => null,
                 'errors'     => $errors,
+                'pendientes' => $this->getCargaPendientes(),
             ]);
             return;
         }
@@ -299,25 +325,98 @@ class InventarioController extends Controller
                 'categorias' => $this->categoriaModel->getActivas(),
                 'flash'      => null,
                 'errors'     => ['No se pudo procesar el archivo. Verifique que corresponda a la plantilla.'],
+                'pendientes' => $this->getCargaPendientes(),
             ]);
             return;
         }
 
+        $this->setCargaPendientes($resultado['conflictos'] ?? []);
+
         $msg = 'Carga finalizada: ' . $resultado['creados'] . ' nuevo(s)';
-        if (!empty($resultado['existentes'])) {
-            $msg .= ', ' . $resultado['existentes'] . ' ya existían (no se duplicaron, stock conservado)';
+        if (!empty($resultado['categorias_nuevas'])) {
+            $msg .= ', categorías creadas: ' . implode(', ', $resultado['categorias_nuevas']);
+        }
+        if (!empty($resultado['conflictos'])) {
+            $msg .= ', ' . count($resultado['conflictos']) . ' ya existían y quedaron pendientes de acción';
         }
         if (!empty($resultado['omitidos'])) {
             $msg .= '. Filas vacías omitidas: ' . $resultado['omitidos'];
         }
         $msg .= '.';
 
-        $detalles = array_merge($resultado['existentes_detalle'] ?? [], $resultado['errores'] ?? []);
         $this->setFlash(
-            ($resultado['errores'] || !empty($resultado['existentes'])) ? 'warning' : 'success',
+            ($resultado['errores'] || !empty($resultado['conflictos'])) ? 'warning' : 'success',
             $msg,
-            $detalles
+            $resultado['errores'] ?? []
         );
+
+        if (!empty($resultado['conflictos'])) {
+            $this->redirect('/inventario/cargar/pendientes');
+        }
+        $this->redirect('/inventario/cargar');
+    }
+
+    public function cargarPendientes(): void
+    {
+        Auth::requireAdmin();
+        $pendientes = $this->getCargaPendientes();
+        if (empty($pendientes)) {
+            $this->setFlash('info', 'No hay elementos pendientes de la última carga.');
+            $this->redirect('/inventario/cargar');
+        }
+
+        $this->view('inventario/cargar-pendientes', [
+            'pageTitle'  => 'Elementos existentes en la carga',
+            'pendientes' => $pendientes,
+            'flash'      => $this->getFlash(),
+        ]);
+    }
+
+    public function cargarPendienteAccion(): void
+    {
+        Auth::requireAdmin();
+        $key = (string) ($_POST['key'] ?? '');
+        $accion = (string) ($_POST['accion'] ?? '');
+        $pendientes = $this->getCargaPendientes();
+        $item = $pendientes[$key] ?? null;
+
+        if (!$item) {
+            $this->setFlash('danger', 'Ese elemento ya no está en la lista de pendientes.');
+            $this->redirect('/inventario/cargar/pendientes');
+        }
+
+        try {
+            if ($accion === 'actualizar') {
+                $this->aplicarPendienteActualizar($item);
+                $this->setFlash('success', 'Se actualizó ' . $item['data']['codigo'] . ' (el stock no cambió).');
+            } elseif ($accion === 'crear') {
+                $this->aplicarPendienteCrear($item);
+                $this->setFlash('success', 'Se creó ' . $item['data']['codigo'] . ' aunque el nombre ya existía.');
+            } elseif ($accion === 'omitir') {
+                $this->setFlash('info', 'Se omitió ' . $item['data']['codigo'] . '.');
+            } else {
+                $this->setFlash('danger', 'Acción no válida.');
+                $this->redirect('/inventario/cargar/pendientes');
+            }
+        } catch (RuntimeException $e) {
+            $this->setFlash('danger', $e->getMessage());
+            $this->redirect('/inventario/cargar/pendientes');
+        }
+
+        unset($pendientes[$key]);
+        $this->setCargaPendientes($pendientes);
+
+        if (empty($pendientes)) {
+            $this->redirect('/inventario/cargar');
+        }
+        $this->redirect('/inventario/cargar/pendientes');
+    }
+
+    public function cargarPendientesOmitirTodos(): void
+    {
+        Auth::requireAdmin();
+        $this->setCargaPendientes([]);
+        $this->setFlash('info', 'Se omitieron todos los elementos pendientes.');
         $this->redirect('/inventario/cargar');
     }
 
@@ -336,10 +435,10 @@ class InventarioController extends Controller
         $categoriaActual = 'General';
         $map = [];
         $creados = 0;
-        $existentes = 0;
         $omitidos = 0;
         $errores = [];
-        $existentesDetalle = [];
+        $conflictos = [];
+        $categoriasNuevas = [];
         $db = Database::getConnection();
         $db->beginTransaction();
 
@@ -351,15 +450,17 @@ class InventarioController extends Controller
                     continue;
                 }
 
-                if (str_starts_with($line, '#')) {
-                    if (preg_match('/#\s*CATEGORIA\s*:\s*(.+)$/iu', $line, $m)) {
-                        $categoriaActual = trim($m[1]);
+                $row = str_getcsv($line, $delimiter);
+                $first = trim((string) ($row[0] ?? ''));
+                if (str_starts_with($line, '#') || str_starts_with($first, '#')) {
+                    $marcador = $this->parseCategoriaMarcador($line, $row);
+                    if ($marcador !== null) {
+                        $categoriaActual = $marcador['nombre'];
                         $map = [];
                     }
                     continue;
                 }
 
-                $row = str_getcsv($line, $delimiter);
                 $normalized = array_map(fn ($v) => $this->normalizeHeader((string) $v), $row);
                 if ($this->isHeaderRow($normalized)) {
                     $map = $this->headerMap($normalized);
@@ -377,54 +478,51 @@ class InventarioController extends Controller
                     continue;
                 }
 
-                $categoria = $this->categoriaModel->ensureByNombre($data['categoria_nombre']);
-                if (!$categoria) {
-                    $errores[] = 'Fila ' . $linea . ': no se pudo usar la categoría ' . $data['categoria_nombre'] . '.';
+                $nombreCat = $data['categoria_nombre'];
+                if (strcasecmp($nombreCat, 'NuevaCategoria') === 0) {
+                    $errores[] = 'Fila ' . $linea . ': cambie "NuevaCategoria" por el nombre real de la categoría.';
                     continue;
                 }
 
-                $existente = $this->model->findByCodigo($data['codigo']);
-                if ($existente && ($existente['Estado'] ?? '') !== 'Eliminado') {
-                    $stockActual = (int) $existente['Cantidad'];
-                    $this->model->update($data['codigo'], [
-                        'elemento'     => $data['elemento'],
-                        'id_categoria' => (int) $categoria['id_categoria'],
-                        'descripcion'  => $data['descripcion'],
-                        'cantidad'     => $stockActual,
-                        'fotografia'   => $existente['Fotografia'] ?? null,
-                        'estado'       => $data['estado'],
-                    ]);
-                    $existentes++;
-                    if (count($existentesDetalle) < 20) {
-                        $existentesDetalle[] = $data['codigo'] . ' — ' . $data['elemento']
-                            . ' ya existe (stock actual: ' . $stockActual
-                            . ', saldo inicial en plantilla: '
-                            . ($data['saldo_inicial'] ?? '—') . '). No se duplicó.';
+                $porCodigo = $this->model->findByCodigo($data['codigo']);
+                if ($porCodigo && ($porCodigo['Estado'] ?? '') === 'Eliminado') {
+                    $porCodigo = null;
+                }
+                $porElemento = $this->model->findByElemento($data['elemento'], $data['codigo']);
+
+                $motivos = [];
+                if ($porCodigo) {
+                    $motivos[] = 'El código ' . $data['codigo'] . ' ya existe (' . ($porCodigo['Elemento'] ?? '') . ').';
+                }
+                if ($porElemento) {
+                    $motivos[] = 'El elemento "' . $data['elemento'] . '" ya existe con el código '
+                        . ($porElemento['Codigo'] ?? '') . '.';
+                }
+
+                if ($motivos) {
+                    $ref = $porCodigo ?: $porElemento;
+                    $key = $data['codigo'] . ':' . $linea;
+                    $conflictos[$key] = [
+                        'key'              => $key,
+                        'linea'            => $linea,
+                        'motivos'          => $motivos,
+                        'data'             => $data,
+                        'existente'        => $this->snapshotExistente($ref),
+                        'puede_actualizar' => $porCodigo !== null,
+                        'puede_crear'      => $porCodigo === null,
+                    ];
+                    continue;
+                }
+
+                try {
+                    $yaExisteCat = (bool) $this->categoriaModel->findByNombre($nombreCat);
+                    $this->crearDesdeCarga($data);
+                    $creados++;
+                    if (!$yaExisteCat && $this->categoriaModel->findByNombre($nombreCat)) {
+                        $categoriasNuevas[$nombreCat] = $nombreCat;
                     }
-                    continue;
-                }
-
-                $cantidad = $data['stock'] ?? $data['saldo_inicial'] ?? 0;
-                $payload = [
-                    'elemento'     => $data['elemento'],
-                    'id_categoria' => (int) $categoria['id_categoria'],
-                    'descripcion'  => $data['descripcion'],
-                    'cantidad'     => $cantidad,
-                    'fotografia'   => $existente['Fotografia'] ?? null,
-                    'estado'       => $data['estado'],
-                ];
-                if ($existente) {
-                    $this->model->update($data['codigo'], $payload);
-                } else {
-                    $payload['codigo'] = $data['codigo'];
-                    $this->model->create($payload);
-                }
-                $creados++;
-
-                $homonimo = $this->model->findByElemento($data['elemento'], $data['codigo']);
-                if ($homonimo && count($errores) < 20) {
-                    $errores[] = 'Fila ' . $linea . ': se creó ' . $data['codigo']
-                        . ', pero el nombre ya lo usa ' . $homonimo['Codigo'] . '.';
+                } catch (RuntimeException $e) {
+                    $errores[] = 'Fila ' . $linea . ': ' . $e->getMessage();
                 }
             }
 
@@ -435,11 +533,126 @@ class InventarioController extends Controller
         }
 
         return [
-            'creados'             => $creados,
-            'existentes'          => $existentes,
-            'existentes_detalle'  => $existentesDetalle,
-            'omitidos'            => $omitidos,
-            'errores'             => $errores,
+            'creados'           => $creados,
+            'conflictos'        => $conflictos,
+            'categorias_nuevas' => array_values($categoriasNuevas),
+            'omitidos'          => $omitidos,
+            'errores'           => $errores,
+        ];
+    }
+
+    private function snapshotExistente(?array $row): array
+    {
+        if (!$row) {
+            return [];
+        }
+
+        return [
+            'Codigo'    => (string) ($row['Codigo'] ?? ''),
+            'Elemento'  => (string) ($row['Elemento'] ?? ''),
+            'Categoria' => (string) ($row['Categoria'] ?? ''),
+            'Cantidad'  => (int) ($row['Cantidad'] ?? 0),
+            'Estado'    => (string) ($row['Estado'] ?? ''),
+        ];
+    }
+
+    private function crearDesdeCarga(array $data): void
+    {
+        $nombreCat = trim((string) ($data['categoria_nombre'] ?? '')) ?: 'General';
+        $categoria = $this->categoriaModel->ensureByNombre($nombreCat);
+        if (!$categoria) {
+            throw new RuntimeException('No se pudo usar la categoría ' . $nombreCat . '.');
+        }
+
+        $existente = $this->model->findByCodigo($data['codigo']);
+        $cantidad = $data['stock'] ?? $data['saldo_inicial'] ?? 0;
+        $payload = [
+            'elemento'     => $data['elemento'],
+            'id_categoria' => (int) $categoria['id_categoria'],
+            'descripcion'  => $data['descripcion'],
+            'cantidad'     => $cantidad,
+            'fotografia'   => $existente['Fotografia'] ?? null,
+            'estado'       => $data['estado'],
+        ];
+
+        if ($existente) {
+            $this->model->update($data['codigo'], $payload);
+            return;
+        }
+
+        $payload['codigo'] = $data['codigo'];
+        $this->model->create($payload);
+    }
+
+    private function aplicarPendienteActualizar(array $item): void
+    {
+        $data = $item['data'] ?? [];
+        $existente = $this->model->findByCodigo((string) ($data['codigo'] ?? ''));
+        if (!$existente || ($existente['Estado'] ?? '') === 'Eliminado') {
+            throw new RuntimeException('El código ya no existe. Use «Crear de todos modos» u omita la fila.');
+        }
+
+        $nombreCat = trim((string) ($data['categoria_nombre'] ?? '')) ?: 'General';
+        $categoria = $this->categoriaModel->ensureByNombre($nombreCat);
+        if (!$categoria) {
+            throw new RuntimeException('No se pudo usar la categoría ' . $nombreCat . '.');
+        }
+
+        $this->model->update($data['codigo'], [
+            'elemento'     => $data['elemento'],
+            'id_categoria' => (int) $categoria['id_categoria'],
+            'descripcion'  => $data['descripcion'],
+            'cantidad'     => (int) $existente['Cantidad'],
+            'fotografia'   => $existente['Fotografia'] ?? null,
+            'estado'       => $data['estado'],
+        ]);
+    }
+
+    private function aplicarPendienteCrear(array $item): void
+    {
+        $data = $item['data'] ?? [];
+        $existente = $this->model->findByCodigo((string) ($data['codigo'] ?? ''));
+        if ($existente && ($existente['Estado'] ?? '') !== 'Eliminado') {
+            throw new RuntimeException('El código ya existe. Use Actualizar u Omitir.');
+        }
+
+        $this->crearDesdeCarga($data);
+    }
+
+    private function getCargaPendientes(): array
+    {
+        Auth::startSession();
+        return $_SESSION['carga_pendiente'] ?? [];
+    }
+
+    private function setCargaPendientes(array $pendientes): void
+    {
+        Auth::startSession();
+        $_SESSION['carga_pendiente'] = $pendientes;
+    }
+
+    private function parseCategoriaMarcador(string $line, array $row): ?array
+    {
+        $first = trim((string) ($row[0] ?? ''));
+        if (!preg_match('/#\s*CATEGORIA\b/iu', $first) && !preg_match('/#\s*CATEGORIA\b/iu', $line)) {
+            return null;
+        }
+
+        $nombre = isset($row[1]) ? trim((string) $row[1]) : '';
+        $indicadorRaw = isset($row[2]) ? trim((string) $row[2]) : '';
+
+        if ($nombre === '' && preg_match('/#\s*CATEGORIA\s*:?\s*(.+)$/iu', $line, $m)) {
+            $nombre = trim($m[1], " \t\"';:");
+        }
+
+        $nombre = trim($nombre, " \t\"';:");
+        if ($nombre === '' || preg_match('/^codigo$/iu', $this->normalizeHeader($nombre))) {
+            return null;
+        }
+
+        return [
+            'nombre'    => $nombre,
+            'indicador' => CategoriaModel::normalizeIndicador($indicadorRaw),
         ];
     }
 
@@ -508,21 +721,21 @@ class InventarioController extends Controller
         };
 
         if ($map) {
-            $codigo = $get('codigo', 0);
-            $elemento = $get('elemento', 1);
-            $descripcion = $get('descripcion', 2);
-            $estado = $get('estado', 3);
-            $saldo = $get('saldo_inicial', 4);
-            $stock = $get('stock', 5);
             $categoria = $get('categoria', -1);
+            $codigo = $get('codigo', 1);
+            $elemento = $get('elemento', 2);
+            $descripcion = $get('descripcion', 3);
+            $estado = $get('estado', 4);
+            $saldo = $get('saldo_inicial', 5);
+            $stock = $get('stock', 6);
         } else {
-            $codigo = trim((string) ($row[0] ?? ''));
-            $elemento = trim((string) ($row[1] ?? ''));
-            $descripcion = trim((string) ($row[2] ?? ''));
-            $estado = trim((string) ($row[3] ?? ''));
-            $saldo = trim((string) ($row[4] ?? ''));
-            $stock = trim((string) ($row[5] ?? ''));
-            $categoria = '';
+            $categoria = trim((string) ($row[0] ?? ''));
+            $codigo = trim((string) ($row[1] ?? ''));
+            $elemento = trim((string) ($row[2] ?? ''));
+            $descripcion = trim((string) ($row[3] ?? ''));
+            $estado = trim((string) ($row[4] ?? ''));
+            $saldo = trim((string) ($row[5] ?? ''));
+            $stock = trim((string) ($row[6] ?? ''));
         }
 
         if ($codigo === '') {

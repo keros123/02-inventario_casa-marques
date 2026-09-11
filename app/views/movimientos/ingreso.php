@@ -12,6 +12,7 @@ $elementosJson = json_encode(array_map(static function ($el) {
     ];
 }, $elementos), JSON_UNESCAPED_UNICODE);
 $categoriasJson = json_encode($categorias ?? [], JSON_UNESCAPED_UNICODE);
+$siguientesJson = json_encode($siguientesPorCategoria ?? [], JSON_UNESCAPED_UNICODE);
 ?>
 
 <div class="page-header">
@@ -175,22 +176,23 @@ $categoriasJson = json_encode($categorias ?? [], JSON_UNESCAPED_UNICODE);
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-5">
-                            <label class="form-label">Código *</label>
-                            <input type="text" id="codigoNuevoElemento" class="form-control">
-                        </div>
-                        <div class="col-md-7">
-                            <label class="form-label">Elemento *</label>
-                            <input type="text" id="nombreNuevoElemento" class="form-control">
-                        </div>
-                        <div class="col-md-5">
                             <label class="form-label">Categoría *</label>
                             <select id="categoriaNuevoElemento" class="form-select">
                                 <?php foreach ($categorias as $cat): ?>
                                 <option value="<?= (int) $cat['id_categoria'] ?>">
-                                    <?= htmlspecialchars($cat['Nombre']) ?>
+                                    <?= htmlspecialchars(CategoriaModel::formatLabel($cat['Nombre'] ?? '', $cat['Indicador'] ?? null)) ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label">Código *</label>
+                            <input type="text" id="codigoNuevoElemento" class="form-control">
+                            <small class="text-muted">Sugerido: primera letra de la categoría + consecutivo.</small>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Elemento *</label>
+                            <input type="text" id="nombreNuevoElemento" class="form-control">
                         </div>
                         <div class="col-md-7">
                             <label class="form-label">Cantidad *</label>
@@ -239,7 +241,9 @@ $categoriasJson = json_encode($categorias ?? [], JSON_UNESCAPED_UNICODE);
 <script>
 window.ingresoData = {
     elementos: <?= $elementosJson ?: '[]' ?>,
-    categorias: <?= $categoriasJson ?: '[]' ?>
+    categorias: <?= $categoriasJson ?: '[]' ?>,
+    siguientes: <?= $siguientesJson ?: '{}' ?>,
+    siguienteUrl: <?= json_encode($config['base_url'] . '/inventario/siguiente-codigo') ?>
 };
 </script>
 <script src="<?= $config['base_url'] ?>/js/modal-busqueda.js"></script>

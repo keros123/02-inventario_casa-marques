@@ -36,6 +36,18 @@
 </div>
 <?php endif; ?>
 
+<?php if (!empty($pendientes)): ?>
+<div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+        Hay <strong><?= count($pendientes) ?></strong> elemento(s) de una carga anterior que ya existían
+        y siguen pendientes de acción.
+    </div>
+    <a href="<?= $config['base_url'] ?>/inventario/cargar/pendientes" class="btn btn-sm btn-warning">
+        Revisar pendientes
+    </a>
+</div>
+<?php endif; ?>
+
 <div class="row g-3">
     <div class="col-lg-7">
         <div class="card">
@@ -45,7 +57,7 @@
                     <div class="mb-3">
                         <label class="form-label">Archivo *</label>
                         <input type="file" name="archivo" class="form-control" accept=".csv,text/csv" required>
-                        <div class="form-text">Máximo 2 MB. Use la plantilla descargada y complete una sección por categoría.</div>
+                        <div class="form-text">Máximo 2 MB. Use la plantilla: Categoria, Codigo, Elemento, Descripcion, Estado, SaldoInicial, Stock.</div>
                     </div>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-upload"></i> Cargar inventario
@@ -59,11 +71,12 @@
             <div class="card-body">
                 <h3 class="h6 mb-3">Cómo usarla</h3>
                 <ol class="small mb-3 ps-3">
-                    <li>Descargue la plantilla. Trae cada categoría, los elementos que ya existen, su <strong>saldo inicial</strong> y el <strong>stock</strong>.</li>
-                    <li>La columna <strong>Existe</strong> indica <em>Si</em> si el código ya está en el inventario.</li>
-                    <li>Para elementos nuevos complete Código, Elemento y <strong>SaldoInicial</strong> o <strong>Stock</strong> (Existe = No).</li>
-                    <li>Si el código ya existe no se duplica: se identifican, se actualizan los datos y se conserva el stock.</li>
-                    <li>Deje vacías las filas que no vaya a usar.</li>
+                    <li>Descargue la plantilla. Las columnas son <strong>Categoria, Codigo, Elemento, Descripcion, Estado, SaldoInicial, Stock</strong>.</li>
+                    <li>Incluye los elementos actuales para que pueda comparar. Agregue filas nuevas o deje vacías las que no use.</li>
+                    <li>Al cargar se verifica por <strong>código</strong> y por <strong>nombre de elemento</strong>.</li>
+                    <li>Si ya existe, <strong>no se carga</strong>: queda pendiente para omitir, actualizar (sin cambiar el stock) o crear de todos modos.</li>
+                    <li>Los elementos nuevos se importan de inmediato. Puede seguir con el resto aunque haya pendientes.</li>
+                    <li>Una categoría nueva se crea con el nombre de la columna Categoria (sin indicador se muestra como «Sin indicar»).</li>
                 </ol>
                 <p class="small text-muted mb-2">Categorías actuales en la plantilla:</p>
                 <?php if (empty($categorias)): ?>
@@ -71,7 +84,7 @@
                 <?php else: ?>
                 <ul class="small mb-0">
                     <?php foreach ($categorias as $cat): ?>
-                    <li><?= htmlspecialchars($cat['Nombre']) ?></li>
+                    <li><?= htmlspecialchars(CategoriaModel::formatLabel($cat['Nombre'] ?? '', $cat['Indicador'] ?? null)) ?></li>
                     <?php endforeach; ?>
                 </ul>
                 <?php endif; ?>

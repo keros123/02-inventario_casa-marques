@@ -12,6 +12,12 @@ class Migrator
             return;
         }
 
+        try {
+            self::ensureCategoriaIndicador($db);
+        } catch (Throwable $e) {
+            error_log('Migrator::ensureCategoriaIndicador — ' . $e->getMessage());
+        }
+
         if (Database::isPostgres()) {
             return;
         }
@@ -160,6 +166,7 @@ class Migrator
             'CREATE TABLE IF NOT EXISTS ' . self::t('Categorias') . " (
                 id_categoria INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 Nombre VARCHAR(100) CHARACTER SET {$charset} COLLATE {$collation} NOT NULL,
+                Indicador VARCHAR(20) DEFAULT NULL,
                 Estado ENUM('Activo', 'Inactivo', 'Eliminado') NOT NULL DEFAULT 'Activo'
             ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE={$collation}"
         );
@@ -256,8 +263,43 @@ class Migrator
         }
     }
 
+    private static function ensureCategoriaIndicador(PDO $db): void
+    {
+        if (!self::tableExists($db, 'Categorias')) {
+            return;
+        }
+
+        if (self::columnExists($db, 'Categorias', 'Indicador')) {
+            return;
+        }
+
+        if (Database::isPostgres()) {
+            $db->exec(
+                'ALTER TABLE ' . self::t('Categorias')
+                . ' ADD COLUMN IF NOT EXISTS "Indicador" VARCHAR(20)'
+            );
+            return;
+        }
+
+        $db->exec(
+            'ALTER TABLE ' . self::t('Categorias')
+            . ' ADD COLUMN Indicador VARCHAR(20) NULL DEFAULT NULL AFTER Nombre'
+        );
+    }
+
     private static function columnExists(PDO $db, string $table, string $column): bool
     {
+        if (Database::isPostgres()) {
+            $stmt = $db->prepare(
+                'SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = current_schema()
+                   AND table_name = ?
+                   AND column_name = ?'
+            );
+            $stmt->execute([self::n($table), $column]);
+            return (int) $stmt->fetchColumn() > 0;
+        }
+
         $stmt = $db->prepare(
             'SELECT COUNT(*) FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?'
@@ -268,6 +310,16 @@ class Migrator
 
     private static function tableExists(PDO $db, string $table): bool
     {
+        if (Database::isPostgres()) {
+            $stmt = $db->prepare(
+                'SELECT COUNT(*) FROM information_schema.tables
+                 WHERE table_schema = current_schema()
+                   AND table_name = ?'
+            );
+            $stmt->execute([self::n($table)]);
+            return (int) $stmt->fetchColumn() > 0;
+        }
+
         $stmt = $db->prepare(
             'SELECT COUNT(*) FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = LOWER(?)'

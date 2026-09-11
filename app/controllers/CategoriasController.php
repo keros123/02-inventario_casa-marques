@@ -30,6 +30,7 @@ class CategoriasController extends Controller
             'pageTitle' => 'Nueva categoría',
             'item'      => null,
             'action'    => 'store',
+            'esDefault' => false,
         ]);
     }
 
@@ -44,6 +45,7 @@ class CategoriasController extends Controller
                 'item'      => $data,
                 'action'    => 'store',
                 'errors'    => $errors,
+                'esDefault' => CategoriaModel::isDefaultNombre($data['nombre']),
             ]);
             return;
         }
@@ -67,6 +69,7 @@ class CategoriasController extends Controller
             'pageTitle' => 'Editar categoría',
             'item'      => $item,
             'action'    => 'update',
+            'esDefault' => CategoriaModel::isDefault($item),
         ]);
     }
 
@@ -80,15 +83,20 @@ class CategoriasController extends Controller
             $this->redirect('/categorias');
         }
 
-        $data = $this->getFormData();
-        $errors = $this->validate($data);
+        $data = $this->getFormData($item);
+        $errors = $this->validate($data, $item);
 
         if ($errors) {
             $this->view('categorias/form', [
                 'pageTitle' => 'Editar categoría',
-                'item'      => array_merge($item, $data),
+                'item'      => array_merge($item, [
+                    'Nombre'    => $data['nombre'],
+                    'Indicador' => $data['indicador'],
+                    'Estado'    => $data['estado'],
+                ]),
                 'action'    => 'update',
                 'errors'    => $errors,
+                'esDefault' => CategoriaModel::isDefault($item),
             ]);
             return;
         }
@@ -102,7 +110,10 @@ class CategoriasController extends Controller
     {
         $id = (int) ($_POST['id'] ?? 0);
         if ($id > 0) {
-            if ($this->model->countItems($id) > 0) {
+            $item = $this->model->findById($id);
+            if ($item && CategoriaModel::isDefault($item)) {
+                $this->setFlash('danger', 'No se puede eliminar la categoría por defecto.');
+            } elseif ($this->model->countItems($id) > 0) {
                 $this->setFlash('danger', 'No se puede eliminar: hay elementos asignados a esta categoría.');
             } else {
                 $this->model->delete($id);
@@ -112,19 +123,29 @@ class CategoriasController extends Controller
         $this->redirect('/categorias');
     }
 
-    private function getFormData(): array
+    private function getFormData(?array $actual = null): array
     {
+        $esDefault = $actual ? CategoriaModel::isDefault($actual) : CategoriaModel::isDefaultNombre(trim($_POST['nombre'] ?? ''));
+        $nombre = $esDefault && $actual
+            ? (string) $actual['Nombre']
+            : trim($_POST['nombre'] ?? '');
+
         return [
-            'nombre' => trim($_POST['nombre'] ?? ''),
-            'estado' => $_POST['estado'] ?? 'Activo',
+            'nombre'    => $nombre,
+            'estado'    => $_POST['estado'] ?? 'Activo',
+            'indicador' => $esDefault ? null : CategoriaModel::normalizeIndicador($_POST['indicador'] ?? ''),
         ];
     }
 
-    private function validate(array $data): array
+    private function validate(array $data, ?array $actual = null): array
     {
         $errors = [];
+        $esDefault = $actual ? CategoriaModel::isDefault($actual) : CategoriaModel::isDefaultNombre($data['nombre']);
         if ($data['nombre'] === '') {
             $errors[] = 'El nombre es obligatorio.';
+        }
+        if (!$esDefault && empty($data['indicador'])) {
+            $errors[] = 'Indique si la categoría es Consumible o No Consumible.';
         }
         return $errors;
     }

@@ -1,7 +1,7 @@
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
         <h2 class="page-title">Categorías</h2>
-        <p class="page-subtitle">Clasificación de elementos del inventario</p>
+        <p class="page-subtitle">Clasificación de elementos. Las categorías (salvo General) indican si son consumibles.</p>
     </div>
     <a href="<?= $config['base_url'] ?>/categorias/create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg"></i> Nueva categoría
@@ -21,6 +21,7 @@
             <thead>
                 <tr>
                     <th>Nombre</th>
+                    <th>Indicador</th>
                     <th>Estado</th>
                     <th class="text-end">Acciones</th>
                 </tr>
@@ -28,12 +29,32 @@
             <tbody>
                 <?php if (empty($items)): ?>
                 <tr>
-                    <td colspan="3" class="text-center text-muted py-4">No hay categorías registradas.</td>
+                    <td colspan="4" class="text-center text-muted py-4">No hay categorías registradas.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($items as $item): ?>
+                <?php
+                $esDefault = CategoriaModel::isDefault($item);
+                $indicador = trim((string) ($item['Indicador'] ?? ''));
+                ?>
                 <tr>
-                    <td><?= htmlspecialchars($item['Nombre']) ?></td>
+                    <td>
+                        <?= htmlspecialchars($item['Nombre']) ?>
+                        <?php if ($esDefault): ?>
+                        <span class="badge bg-secondary ms-1">Por defecto</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($esDefault): ?>
+                        <span class="text-muted">—</span>
+                        <?php elseif ($indicador === 'Consumible'): ?>
+                        <span class="badge bg-warning text-dark">Consumible</span>
+                        <?php elseif ($indicador === 'No Consumible'): ?>
+                        <span class="badge bg-info">No Consumible</span>
+                        <?php else: ?>
+                        <span class="text-muted">Sin indicar</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <span class="badge bg-<?= $item['Estado'] === 'Activo' ? 'success' : 'secondary' ?>">
                             <?= htmlspecialchars($item['Estado']) ?>
@@ -44,6 +65,7 @@
                            class="btn btn-sm btn-outline-primary" title="Editar">
                             <i class="bi bi-pencil"></i>
                         </a>
+                        <?php if (!$esDefault): ?>
                         <form method="POST" action="<?= $config['base_url'] ?>/categorias/delete"
                               class="d-inline" onsubmit="return confirm('¿Eliminar esta categoría?')">
                             <input type="hidden" name="id" value="<?= (int) $item['id_categoria'] ?>">
@@ -51,6 +73,7 @@
                                 <i class="bi bi-trash"></i>
                             </button>
                         </form>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>

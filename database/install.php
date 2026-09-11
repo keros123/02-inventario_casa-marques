@@ -73,6 +73,7 @@ $pdo->exec(
     'CREATE TABLE IF NOT EXISTS ' . $t('Categorias') . " (
         id_categoria INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
         Nombre VARCHAR(100) CHARACTER SET {$charset} COLLATE {$collation} NOT NULL,
+        Indicador VARCHAR(20) DEFAULT NULL,
         Estado ENUM('Activo', 'Inactivo', 'Eliminado') NOT NULL DEFAULT 'Activo'
     ) {$engine}"
 );

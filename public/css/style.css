@@ -151,6 +151,32 @@ body {
     background: var(--word-hover);
 }
 
+.table-inventario {
+    font-size: 0.75rem;
+}
+
+.table-inventario thead th {
+    font-size: 0.68rem;
+}
+
+.table-inventario td {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+}
+
+.table-inventario code {
+    font-size: 0.72rem;
+}
+
+.table-inventario .badge {
+    font-size: 0.62rem;
+}
+
+.table-inventario .btn-sm {
+    padding: 0.12rem 0.35rem;
+    font-size: 0.7rem;
+}
+
 /* Botones */
 .btn-primary {
     background-color: var(--word-blue);
@@ -425,6 +451,28 @@ a .stat-card {
     white-space: nowrap;
     text-transform: none;
     letter-spacing: 0.02em;
+}
+
+.col-num {
+    width: 3rem;
+    min-width: 3rem;
+    text-align: center;
+    vertical-align: middle;
+    font-variant-numeric: tabular-nums;
+}
+
+.pagination .page-link {
+    color: var(--word-blue);
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--word-blue);
+    border-color: var(--word-blue);
+    color: var(--word-white);
+}
+
+.pagination .page-item.disabled .page-link {
+    color: var(--word-text-muted);
 }
 
 .photo-cell {
