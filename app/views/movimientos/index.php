@@ -1,7 +1,7 @@
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
         <h2 class="page-title">Movimientos de inventario</h2>
-        <p class="page-subtitle">Historial de ingresos, salidas, devoluciones y Dar_baja</p>
+        <p class="page-subtitle">Historial de ingresos, salidas, devoluciones, dar de baja y consumo</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
         <button onclick="window.print()" class="btn btn-outline-primary btn-sm">
@@ -43,6 +43,7 @@ $tipoBadge = static function (string $tipo): string {
         'Ingreso'    => 'success',
         'Prestamo'   => 'warning text-dark',
         'Devolucion' => 'info text-dark',
+        'Consumo'    => 'warning text-dark',
         default      => 'secondary',
     };
 };
@@ -63,6 +64,7 @@ $esDarDeBaja = static function (string $tipo): bool {
                     <option value="Prestamo" <?= $filterTipo === 'Prestamo' ? 'selected' : '' ?>>Salida</option>
                     <option value="Devolucion" <?= $filterTipo === 'Devolucion' ? 'selected' : '' ?>>Devolución</option>
                     <option value="Dar_Baja" <?= $filterTipo === 'Dar_Baja' || $filterTipo === 'DarDeBaja' ? 'selected' : '' ?>>Dar_baja</option>
+                    <option value="Consumo" <?= $filterTipo === 'Consumo' ? 'selected' : '' ?>>Consumo</option>
                 </select>
             </div>
             <div class="col-md-5">
@@ -122,6 +124,7 @@ $esDarDeBaja = static function (string $tipo): bool {
                     $tipo === 'Prestamo'   => $config['base_url'] . '/movimientos/prestamo/documento?id=' . $item['id_movimiento'],
                     $tipo === 'Devolucion' => $config['base_url'] . '/movimientos/devolucion/documento?id=' . $item['id_movimiento'],
                     $esDarDeBaja($tipo)    => $config['base_url'] . '/prestamos/dar-de-baja/documento?id=' . $item['id_movimiento'],
+                    MovimientoModel::esConsumo($tipo) => $config['base_url'] . '/prestamos/consumo/documento?id=' . $item['id_movimiento'],
                     default                => null,
                 };
                 ?>
@@ -142,7 +145,7 @@ $esDarDeBaja = static function (string $tipo): bool {
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if (($tipo === 'Devolucion' || $esDarDeBaja($tipo)) && !empty($item['Consecutivo_ref'])): ?>
+                        <?php if (($tipo === 'Devolucion' || $esDarDeBaja($tipo) || MovimientoModel::esConsumo($tipo)) && !empty($item['Consecutivo_ref'])): ?>
                         <a href="<?= $config['base_url'] ?>/prestamos?cuentadante=<?= urlencode($item['Cedula_cuentadante'] ?? '') ?>"
                            class="text-decoration-none" title="Ver salidas">
                             Salida #<?= (int) $item['Consecutivo_ref'] ?>
@@ -164,7 +167,8 @@ $esDarDeBaja = static function (string $tipo): bool {
                     <td class="text-center"><?= (int) ($item['Total_unidades'] ?? 0) ?></td>
                     <td class="text-end">
                         <?php if ($documentoUrl): ?>
-                            <a href="<?= $documentoUrl ?>" class="btn btn-outline-primary btn-sm">
+                            <a href="<?= $documentoUrl ?>" class="btn btn-outline-primary btn-sm"
+                               target="_blank" rel="noopener noreferrer">
                                 <i class="bi bi-file-earmark-pdf"></i> Ver Documento
                             </a>
                         <?php endif; ?>

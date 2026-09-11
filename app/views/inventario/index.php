@@ -162,7 +162,7 @@ $pageUrl = static function (int $p) use ($config, $listParams): string {
                     <td>
                         <?= htmlspecialchars($item['Categoria'] ?? 'Sin categoría') ?>
                         <?php
-                        $indCat = trim((string) ($item['Categoria_indicador'] ?? ''));
+                        $indCat = CategoriaModel::indicadorEfectivo($item['Categoria'] ?? '', $item['Categoria_indicador'] ?? null);
                         if ($indCat === 'Consumible'): ?>
                         <span class="badge bg-warning text-dark ms-1">Consumible</span>
                         <?php elseif ($indCat === 'No Consumible'): ?>

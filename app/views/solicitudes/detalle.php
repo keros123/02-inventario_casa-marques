@@ -48,7 +48,8 @@ $volver = Auth::isAdmin() ? '/solicitudes' : '/solicitudes/mis';
                     <?php if ($s['Estado'] === 'Aprobada' && !empty($s['id_movimiento'])): ?>
                     <dt class="col-sm-5">Salida</dt>
                     <dd class="col-sm-7">
-                        <a href="<?= $config['base_url'] ?>/movimientos/prestamo/documento?id=<?= (int) $s['id_movimiento'] ?>">
+                        <a href="<?= $config['base_url'] ?>/movimientos/prestamo/documento?id=<?= (int) $s['id_movimiento'] ?>"
+                           target="_blank" rel="noopener noreferrer">
                             Ver documento
                         </a>
                     </dd>

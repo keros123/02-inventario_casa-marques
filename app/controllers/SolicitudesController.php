@@ -35,17 +35,12 @@ class SolicitudesController extends Controller
                 $soloPropio ? $user['cedula'] : null
             ),
             'flash'       => $this->getFlash(),
-            'puedeCrear'  => !Auth::isAdmin(),
+            'puedeCrear'  => true,
         ]);
     }
 
     public function nueva(): void
     {
-        if (Auth::isAdmin()) {
-            $this->setFlash('info', 'Los administradores registran salidas directamente desde Movimientos.');
-            $this->redirect('/prestamos');
-        }
-
         $fecha = trim($_GET['fecha'] ?? '');
         if ($fecha !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             $fecha = '';
@@ -65,11 +60,6 @@ class SolicitudesController extends Controller
 
     public function store(): void
     {
-        if (Auth::isAdmin()) {
-            $this->setFlash('danger', 'Los administradores registran salidas directamente.');
-            $this->redirect('/solicitudes');
-        }
-
         $form = $this->getFormData();
         $errors = $this->validateForm($form);
         $lineas = [];
@@ -102,8 +92,8 @@ class SolicitudesController extends Controller
                 $form['descripcion'] !== '' ? $form['descripcion'] : null,
                 $lineas
             );
-            $this->setFlash('success', 'Solicitud #' . $id . ' enviada. Un administrador debe aprobarla.');
-            $this->redirect('/solicitudes/mis');
+            $this->setFlash('success', 'Solicitud #' . $id . ' enviada. Queda pendiente de aprobación.');
+            $this->redirect(Auth::isAdmin() ? '/solicitudes' : '/solicitudes/mis');
         } catch (Throwable $e) {
             $this->view('solicitudes/form', [
                 'pageTitle' => 'Solicitud de salida',
@@ -116,10 +106,6 @@ class SolicitudesController extends Controller
 
     public function mis(): void
     {
-        if (Auth::isAdmin()) {
-            $this->redirect('/solicitudes');
-        }
-
         $user = Auth::user();
         $this->view('solicitudes/mis', [
             'pageTitle'   => 'Mis solicitudes',
@@ -171,7 +157,10 @@ class SolicitudesController extends Controller
         try {
             $idMovimiento = $this->solicitudModel->aprobar($id, $user['cedula']);
             $this->setFlash('success', 'Solicitud aprobada. Salida registrada.');
-            $this->redirect('/movimientos/prestamo/documento?id=' . $idMovimiento);
+            $this->redirectAndOpenDocument(
+                '/solicitudes/ver?id=' . $id,
+                '/movimientos/prestamo/documento?id=' . $idMovimiento
+            );
         } catch (Throwable $e) {
             $this->setFlash('danger', $e->getMessage());
             $this->redirect('/solicitudes/ver?id=' . $id);
@@ -208,7 +197,7 @@ class SolicitudesController extends Controller
         } else {
             $this->setFlash('danger', 'No se pudo cancelar la solicitud.');
         }
-        $this->redirect('/solicitudes/mis');
+        $this->redirect(Auth::isAdmin() ? '/solicitudes' : '/solicitudes/mis');
     }
 
     private function getFormData(): array

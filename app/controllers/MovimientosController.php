@@ -72,7 +72,7 @@ class MovimientosController extends Controller
                 $lineas
             );
             $this->setFlash('success', 'Ingreso registrado. Cantidad actualizada en inventario.');
-            $this->redirect('/movimientos/ingreso/documento?id=' . $lastId);
+            $this->redirectAndOpenDocument('/movimientos', '/movimientos/ingreso/documento?id=' . $lastId);
         } catch (RuntimeException $e) {
             $categorias = $this->categoriaModel->getActivas();
             $this->view('movimientos/ingreso', [
@@ -101,7 +101,7 @@ class MovimientosController extends Controller
             'pageTitle' => 'Documento de Ingreso #' . $ingreso['Consecutivo'],
             'ingreso' => $ingreso,
             'detalles' => $detalles
-        ]);
+        ], layout: false);
     }
 
     public function prestamoDocumento(): void
@@ -119,7 +119,7 @@ class MovimientosController extends Controller
             'pageTitle' => 'Documento de Salida #' . $prestamo['Consecutivo'],
             'prestamo' => $prestamo,
             'detalles' => $detalles
-        ]);
+        ], layout: false);
     }
 
     public function devolucionDocumento(): void
@@ -137,7 +137,7 @@ class MovimientosController extends Controller
             'pageTitle' => 'Documento de Devolución #' . $devolucion['Consecutivo'],
             'devolucion' => $devolucion,
             'detalles' => $detalles
-        ]);
+        ], layout: false);
     }
 
     public function prestamo(): void
@@ -199,7 +199,7 @@ class MovimientosController extends Controller
     {
         $tipo = trim($_GET['tipo'] ?? '');
         $filters = [
-            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'DarDeBaja'], true) ? $tipo : '',
+            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'DarDeBaja', 'Consumo'], true) ? $tipo : '',
             'cedula_cuentadante' => trim($_GET['cuentadante'] ?? ''),
             'estado'             => trim($_GET['estado'] ?? ''),
         ];
@@ -336,112 +336,32 @@ class MovimientosController extends Controller
 
     public function darDeBaja(): void
     {
-        $id = (int) ($_GET['id'] ?? 0);
-        $prestamo = $id > 0 ? $this->movimientoModel->findPrestamoById($id) : null;
+        $this->mostrarCierrePendiente('Dar_Baja');
+    }
 
-        if (!$prestamo) {
-            $this->setFlash('danger', 'Salida no encontrada.');
-            $this->redirect('/prestamos');
-            return;
-        }
-
-        $lineas = $this->movimientoModel->getLineasPendientes($id);
-        $pendienteTotal = array_sum(array_column($lineas, 'pendiente'));
-
-        if ($pendienteTotal === 0) {
-            $this->setFlash('danger', 'No hay elementos pendientes por dar de baja.');
-            $this->redirect('/prestamos');
-            return;
-        }
-
-        $this->view('movimientos/dar-de-baja', [
-            'pageTitle'      => 'Dar de baja salida #' . $prestamo['Consecutivo'],
-            'prestamo'       => $prestamo,
-            'lineas'         => $lineas,
-            'pendienteTotal' => $pendienteTotal,
-            'form'           => ['descripcion' => ''],
-            'errors'         => [],
-            'flash'          => $this->getFlash(),
-        ]);
+    public function consumo(): void
+    {
+        $this->mostrarCierrePendiente('Consumo');
     }
 
     public function darDeBajaStore(): void
     {
-        $id = (int) ($_POST['id_movimiento'] ?? 0);
-        $prestamo = $id > 0 ? $this->movimientoModel->findPrestamoById($id) : null;
+        $this->guardarCierrePendiente('Dar_Baja');
+    }
 
-        if (!$prestamo) {
-            $this->setFlash('danger', 'Salida no encontrada.');
-            $this->redirect('/prestamos');
-            return;
-        }
-
-        $descripcion = trim($_POST['descripcion'] ?? '');
-        $codigos = $_POST['linea_codigo'] ?? [];
-        $cantidades = $_POST['linea_cantidad'] ?? [];
-        $lineas = [];
-
-        if (is_array($codigos)) {
-            foreach ($codigos as $i => $codigo) {
-                $lineas[] = [
-                    'codigo'   => trim($codigo),
-                    'cantidad' => (int) ($cantidades[$i] ?? 0),
-                ];
-            }
-        }
-
-        if (empty($descripcion)) {
-            $lineasError = $this->movimientoModel->getLineasPendientes($id);
-            $this->view('movimientos/dar-de-baja', [
-                'pageTitle'      => 'Dar de baja salida #' . $prestamo['Consecutivo'],
-                'prestamo'       => $prestamo,
-                'lineas'         => $lineasError,
-                'pendienteTotal' => array_sum(array_column($lineasError, 'pendiente')),
-                'form'           => ['descripcion' => $descripcion],
-                'errors'         => ['Las observaciones son obligatorias.'],
-                'flash'          => null,
-            ]);
-            return;
-        }
-
-        try {
-            $fotos = $this->handleDarBajaUploads($id);
-            $idMovimiento = $this->movimientoModel->registrarDarDeBaja($id, $lineas, $descripcion, $fotos);
-            $this->movimientoModel->sincronizarEstadoPrestamo($id);
-            $this->redirect('/prestamos/dar-de-baja/documento?id=' . $idMovimiento);
-        } catch (RuntimeException $e) {
-            $lineasError = $this->movimientoModel->getLineasPendientes($id);
-            $this->view('movimientos/dar-de-baja', [
-                'pageTitle'      => 'Dar de baja salida #' . $prestamo['Consecutivo'],
-                'prestamo'       => $prestamo,
-                'lineas'         => $lineasError,
-                'pendienteTotal' => array_sum(array_column($lineasError, 'pendiente')),
-                'form'           => ['descripcion' => $descripcion],
-                'errors'         => [$e->getMessage()],
-                'flash'          => null,
-            ]);
-        }
+    public function consumoStore(): void
+    {
+        $this->guardarCierrePendiente('Consumo');
     }
 
     public function darDeBajaDocumento(): void
     {
-        $id = (int) ($_GET['id'] ?? 0);
-        $movimiento = $this->movimientoModel->findDarDeBajaById($id);
-        if (!$movimiento) {
-            $this->setFlash('danger', 'Movimiento no encontrado.');
-            $this->redirect('/movimientos');
-            return;
-        }
+        $this->mostrarDocumentoCierre();
+    }
 
-        $detalles = $this->movimientoModel->getDetalleByMovimientoId($id);
-        $fotos = $this->movimientoModel->getFotosByMovimientoId($id);
-
-        $this->view('movimientos/dar-de-baja-documento', [
-            'pageTitle' => 'Documento de Dar de Baja #' . $movimiento['Consecutivo'],
-            'movimiento' => $movimiento,
-            'detalles' => $detalles,
-            'fotos' => $fotos,
-        ], layout: false);
+    public function consumoDocumento(): void
+    {
+        $this->mostrarDocumentoCierre();
     }
 
     public function devolucionTotal(): void
@@ -697,6 +617,19 @@ class MovimientosController extends Controller
                     $errors[] = 'El código ' . $codigo . ' ya existe en inventario.';
                     continue;
                 }
+                try {
+                    $fotografia = $this->uploadFotografiaLinea((string) ($row['codigo'] ?? $codigo));
+                    if ($fotografia === null && $codigo !== ($row['codigo'] ?? '')) {
+                        $fotografia = $this->uploadFotografiaLinea($codigo);
+                    }
+                } catch (RuntimeException $e) {
+                    $errors[] = $e->getMessage();
+                    continue;
+                }
+                if ($fotografia === null) {
+                    $errors[] = 'La fotografía es obligatoria para el elemento nuevo ' . $codigo . '.';
+                    continue;
+                }
                 $lineas[] = [
                     'codigo'   => $codigo,
                     'cantidad' => $cantidad,
@@ -705,6 +638,7 @@ class MovimientosController extends Controller
                         'elemento'     => $row['elemento_nuevo'] ?? $row['elemento'] ?? '',
                         'id_categoria' => $idCategoriaNuevo,
                         'descripcion'  => $row['descripcion_nuevo'] ?? '',
+                        'fotografia'   => $fotografia,
                     ],
                 ];
                 continue;
@@ -754,6 +688,183 @@ class MovimientosController extends Controller
         ];
     }
 
+    private function esLineaConsumible(array $linea): bool
+    {
+        return CategoriaModel::esConsumible($linea['categoria'] ?? '', $linea['indicador'] ?? null);
+    }
+
+    private function filtrarLineasCierre(array $lineas, string $modo, string $codigo = ''): array
+    {
+        $codigo = trim($codigo);
+        return array_values(array_filter($lineas, function (array $linea) use ($modo, $codigo): bool {
+            if ((int) ($linea['pendiente'] ?? 0) <= 0) {
+                return false;
+            }
+            $consumible = $this->esLineaConsumible($linea);
+            if ($modo === 'Consumo' && !$consumible) {
+                return false;
+            }
+            if ($modo === 'Dar_Baja' && $consumible) {
+                return false;
+            }
+            return $codigo === '' || ($linea['codigo'] ?? '') === $codigo;
+        }));
+    }
+
+    private function mostrarCierrePendiente(string $modo): void
+    {
+        $id = (int) ($_GET['id'] ?? 0);
+        $codigo = trim((string) ($_GET['codigo'] ?? ''));
+        $prestamo = $id > 0 ? $this->movimientoModel->findPrestamoById($id) : null;
+
+        if (!$prestamo) {
+            $this->setFlash('danger', 'Salida no encontrada.');
+            $this->redirect('/prestamos');
+            return;
+        }
+
+        $lineas = $this->filtrarLineasCierre(
+            $this->movimientoModel->getLineasPendientes($id),
+            $modo,
+            $codigo
+        );
+        $pendienteTotal = array_sum(array_column($lineas, 'pendiente'));
+
+        if ($pendienteTotal === 0) {
+            $this->setFlash(
+                'danger',
+                $modo === 'Consumo'
+                    ? 'No hay elementos consumibles pendientes.'
+                    : 'No hay elementos no consumibles pendientes por dar de baja.'
+            );
+            $this->redirect('/prestamos/devolucion?id=' . $id);
+            return;
+        }
+
+        $this->view('movimientos/dar-de-baja', [
+            'pageTitle'      => ($modo === 'Consumo' ? 'Consumo' : 'Dar de baja') . ' salida #' . $prestamo['Consecutivo'],
+            'prestamo'       => $prestamo,
+            'lineas'         => $lineas,
+            'pendienteTotal' => $pendienteTotal,
+            'modo'           => $modo,
+            'codigoFiltro'   => $codigo,
+            'form'           => ['descripcion' => ''],
+            'errors'         => [],
+            'flash'          => $this->getFlash(),
+        ]);
+    }
+
+    private function guardarCierrePendiente(string $modo): void
+    {
+        $id = (int) ($_POST['id_movimiento'] ?? 0);
+        $codigoFiltro = trim((string) ($_POST['codigo'] ?? ''));
+        $prestamo = $id > 0 ? $this->movimientoModel->findPrestamoById($id) : null;
+
+        if (!$prestamo) {
+            $this->setFlash('danger', 'Salida no encontrada.');
+            $this->redirect('/prestamos');
+            return;
+        }
+
+        $descripcion = trim($_POST['descripcion'] ?? '');
+        $codigos = $_POST['linea_codigo'] ?? [];
+        $cantidades = $_POST['linea_cantidad'] ?? [];
+        $lineas = [];
+        $pendientes = $this->movimientoModel->getLineasPendientes($id);
+        $porCodigo = [];
+        foreach ($pendientes as $linea) {
+            $porCodigo[$linea['codigo']] = $linea;
+        }
+
+        if (is_array($codigos)) {
+            foreach ($codigos as $i => $codigo) {
+                $codigo = trim((string) $codigo);
+                $info = $porCodigo[$codigo] ?? [];
+                $consumible = $this->esLineaConsumible($info);
+                if ($modo === 'Consumo' && !$consumible) {
+                    continue;
+                }
+                if ($modo === 'Dar_Baja' && $consumible) {
+                    continue;
+                }
+                $lineas[] = [
+                    'codigo'   => $codigo,
+                    'cantidad' => (int) ($cantidades[$i] ?? 0),
+                ];
+            }
+        }
+
+        $mostrarError = function (array $errors) use ($id, $prestamo, $modo, $codigoFiltro, $descripcion): void {
+            $lineasError = $this->filtrarLineasCierre(
+                $this->movimientoModel->getLineasPendientes($id),
+                $modo,
+                $codigoFiltro
+            );
+            $this->view('movimientos/dar-de-baja', [
+                'pageTitle'      => ($modo === 'Consumo' ? 'Consumo' : 'Dar de baja') . ' salida #' . $prestamo['Consecutivo'],
+                'prestamo'       => $prestamo,
+                'lineas'         => $lineasError,
+                'pendienteTotal' => array_sum(array_column($lineasError, 'pendiente')),
+                'modo'           => $modo,
+                'codigoFiltro'   => $codigoFiltro,
+                'form'           => ['descripcion' => $descripcion],
+                'errors'         => $errors,
+                'flash'          => null,
+            ]);
+        };
+
+        if ($modo === 'Dar_Baja' && $descripcion === '') {
+            $mostrarError(['Las observaciones son obligatorias.']);
+            return;
+        }
+
+        try {
+            if ($modo === 'Consumo') {
+                $idMovimiento = $this->movimientoModel->registrarConsumo($id, $lineas, $descripcion ?: null);
+                $this->movimientoModel->sincronizarEstadoPrestamo($id);
+                $this->redirectAndOpenDocument(
+                    $this->prestamosListPath(),
+                    '/prestamos/consumo/documento?id=' . $idMovimiento
+                );
+                return;
+            }
+
+            $fotos = $this->handleDarBajaUploads($id);
+            $idMovimiento = $this->movimientoModel->registrarDarDeBaja($id, $lineas, $descripcion, $fotos);
+            $this->movimientoModel->sincronizarEstadoPrestamo($id);
+            $this->redirectAndOpenDocument(
+                $this->prestamosListPath(),
+                '/prestamos/dar-de-baja/documento?id=' . $idMovimiento
+            );
+        } catch (RuntimeException $e) {
+            $mostrarError([$e->getMessage()]);
+        }
+    }
+
+    private function mostrarDocumentoCierre(): void
+    {
+        $id = (int) ($_GET['id'] ?? 0);
+        $movimiento = $id > 0 ? $this->movimientoModel->findMovimientoById($id) : null;
+        if (!$movimiento || !MovimientoModel::esCierrePendiente($movimiento['Tipo'] ?? '')) {
+            $this->setFlash('danger', 'Movimiento no encontrado.');
+            $this->redirect('/movimientos');
+            return;
+        }
+
+        $esConsumo = MovimientoModel::esConsumo($movimiento['Tipo'] ?? '');
+        $detalles = $this->movimientoModel->getDetalleByMovimientoId($id);
+        $fotos = $esConsumo ? [] : $this->movimientoModel->getFotosByMovimientoId($id);
+
+        $this->view('movimientos/dar-de-baja-documento', [
+            'pageTitle'  => ($esConsumo ? 'Documento de Consumo #' : 'Documento de Dar de Baja #')
+                . $movimiento['Consecutivo'],
+            'movimiento' => $movimiento,
+            'detalles'   => $detalles,
+            'fotos'      => $fotos,
+            'esConsumo'  => $esConsumo,
+        ], layout: false);
+    }
+
     private function handleDarBajaUploads(int $idPrestamo): array
     {
         if (empty($_FILES['fotos']['name'][0])) {
@@ -801,7 +912,7 @@ class MovimientosController extends Controller
     {
         $tipo = trim($_GET['tipo'] ?? '');
         $filters = [
-            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'DarDeBaja'], true) ? $tipo : '',
+            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'DarDeBaja', 'Consumo'], true) ? $tipo : '',
             'cedula_cuentadante' => trim($_GET['cuentadante'] ?? ''),
             'estado'             => trim($_GET['estado'] ?? ''),
         ];
@@ -823,6 +934,7 @@ class MovimientosController extends Controller
                 'Prestamo'   => 'Salida',
                 'Devolucion' => 'Devolución',
                 'DarDeBaja', 'Dar_Baja'  => 'Dar_baja',
+                'Consumo'    => 'Consumo',
                 default      => $tipo,
             };
         };
@@ -854,5 +966,48 @@ class MovimientosController extends Controller
 
         fclose($output);
         exit;
+    }
+
+    private function uploadFotografiaLinea(string $codigo): ?string
+    {
+        $bag = $_FILES['linea_fotografia_nuevo'] ?? null;
+        if (!$bag || $codigo === '') {
+            return null;
+        }
+
+        $name = $bag['name'][$codigo] ?? '';
+        if (!is_string($name) || $name === '') {
+            return null;
+        }
+
+        $error = (int) ($bag['error'][$codigo] ?? UPLOAD_ERR_NO_FILE);
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('No se pudo subir la fotografía de ' . $codigo . '.');
+        }
+
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        if (!in_array($ext, $allowed, true)) {
+            throw new RuntimeException('Formato de imagen no permitido para ' . $codigo . '. Use jpg, png, gif o webp.');
+        }
+
+        $tmp = (string) ($bag['tmp_name'][$codigo] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            throw new RuntimeException('No se pudo leer la fotografía de ' . $codigo . '.');
+        }
+
+        $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $codigo) . '.' . $ext;
+        $mime = match ($ext) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png'         => 'image/png',
+            'gif'         => 'image/gif',
+            'webp'        => 'image/webp',
+            default       => 'application/octet-stream',
+        };
+
+        return Storage::uploadFile($tmp, 'inventario/' . $filename, $mime);
     }
 }

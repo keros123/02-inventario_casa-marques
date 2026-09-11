@@ -103,18 +103,11 @@ $filterCuentadante = $filters['cedula_cuentadante'] ?? '';
                         <?php endif; ?>
                     </td>
                     <td class="d-flex flex-column gap-2 justify-content-end align-items-end">
-                        <?php if ($item['Estado'] === 'Activo'): ?>
-                            <?php if ($pendiente > 0): ?>
-                                <a href="<?= $config['base_url'] ?>/prestamos/devolucion?id=<?= $id ?>"
-                                   class="btn btn-primary btn-sm btn-action"
-                                   title="Registrar devolución">
-                                    <i class="bi bi-box-arrow-in-left"></i> Devolución
-                                </a>
-                            <?php endif; ?>
-                            <a href="<?= $config['base_url'] ?>/prestamos/dar-de-baja?id=<?= $id ?>"
-                               class="btn btn-dar-de-baja btn-sm btn-action"
-                               title="Dar de baja salida">
-                                <i class="bi bi-x-circle"></i> Dar de Baja
+                        <?php if ($item['Estado'] === 'Activo' && $pendiente > 0): ?>
+                            <a href="<?= $config['base_url'] ?>/prestamos/devolucion?id=<?= $id ?>"
+                               class="btn btn-primary btn-sm btn-action"
+                               title="Registrar devolución">
+                                <i class="bi bi-box-arrow-in-left"></i> Devolución
                             </a>
                         <?php else: ?>
                             <span class="text-muted">—</span>

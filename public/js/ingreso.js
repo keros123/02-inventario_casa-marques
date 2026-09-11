@@ -60,13 +60,51 @@ document.addEventListener('DOMContentLoaded', function () {
     function aplicarCodigoSugerido() {
         const select = document.getElementById('categoriaNuevoElemento');
         const input = document.getElementById('codigoNuevoElemento');
-        if (!select || !input || !window.InventarioCodigo) {
+        if (!select || !input || !select.value) {
             return;
         }
+
+        const reservados = reservadosEnGrilla();
         const mapa = window.ingresoData?.siguientes || {};
-        const sugerido = window.InventarioCodigo.deMapa(mapa, select.value, reservadosEnGrilla());
-        if (sugerido) {
-            input.value = sugerido;
+        if (window.InventarioCodigo) {
+            const local = window.InventarioCodigo.deMapa(mapa, select.value, reservados);
+            if (local) {
+                input.value = local;
+            }
+        }
+
+        const baseUrl = window.ingresoData?.siguienteUrl;
+        if (!baseUrl) {
+            return;
+        }
+
+        const params = new URLSearchParams({
+            categoria: select.value,
+            reservados: reservados.join(','),
+        });
+        fetch(baseUrl + '?' + params.toString(), { headers: { Accept: 'application/json' } })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (data) {
+                if (data && data.codigo) {
+                    input.value = data.codigo;
+                }
+            })
+            .catch(function () {});
+    }
+
+    function resetFotoNuevo() {
+        const input = document.getElementById('fotografiaNuevoElemento');
+        const preview = document.getElementById('fotoNuevoPreview');
+        const placeholder = document.getElementById('fotoNuevoPlaceholder');
+        if (input) {
+            input.value = '';
+        }
+        if (preview) {
+            preview.src = '';
+            preview.hidden = true;
+        }
+        if (placeholder) {
+            placeholder.hidden = false;
         }
     }
 
@@ -74,6 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('nombreNuevoElemento').value = '';
         document.getElementById('descripcionNuevoElemento').value = '';
         document.getElementById('cantidadNuevoElemento').value = '1';
+        resetFotoNuevo();
         ocultarAlerta(alertModalCrearElemento);
         aplicarCodigoSugerido();
     }
@@ -157,7 +196,8 @@ document.addEventListener('DOMContentLoaded', function () {
         fila.innerHTML =
             '<td><code>' + escapeHtml(datos.codigo) + '</code></td>' +
             '<td class="linea-nombre">' + escapeHtml(datos.nombre) +
-                (datos.esNuevo ? ' <span class="badge bg-info">Nuevo</span>' : '') + '</td>' +
+                (datos.esNuevo ? ' <span class="badge bg-info">Nuevo</span>' : '') +
+                (datos.tieneFoto ? ' <i class="bi bi-image text-muted" title="Con fotografía"></i>' : '') + '</td>' +
             '<td class="linea-stock">' + escapeHtml(String(datos.stock)) + '</td>' +
             '<td><input type="number" name="linea_cantidad[]" class="form-control form-control-sm" min="1" value="' + datos.cantidad + '" required></td>' +
             '<td class="text-end">' +
@@ -170,6 +210,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<i class="bi bi-trash"></i>' +
                 '</button>' +
             '</td>';
+
+        if (datos.archivo) {
+            const dt = new DataTransfer();
+            dt.items.add(datos.archivo);
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.name = 'linea_fotografia_nuevo[' + datos.codigo + ']';
+            fileInput.className = 'd-none';
+            fileInput.files = dt.files;
+            fila.appendChild(fileInput);
+        }
 
         contenedorLineas.appendChild(fila);
         actualizarEstadoGrilla();
@@ -203,9 +254,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const categoria = document.getElementById('categoriaNuevoElemento').value;
         const descripcion = document.getElementById('descripcionNuevoElemento').value.trim();
         const cantidad = parseInt(document.getElementById('cantidadNuevoElemento').value, 10);
+        const fotoInput = document.getElementById('fotografiaNuevoElemento');
+        const archivo = fotoInput && fotoInput.files ? fotoInput.files[0] : null;
 
         if (!codigo || !nombre) {
             mostrarAlerta(alertModalCrearElemento, 'Complete código y nombre del nuevo elemento.');
+            return;
+        }
+
+        if (!archivo) {
+            mostrarAlerta(alertModalCrearElemento, 'Seleccione la fotografía del elemento.');
             return;
         }
 
@@ -232,8 +290,32 @@ document.addEventListener('DOMContentLoaded', function () {
             esNuevo: true,
             categoria: categoria,
             descripcion: descripcion,
+            archivo: archivo,
+            tieneFoto: true,
         });
     });
+
+    const fotoNuevoInput = document.getElementById('fotografiaNuevoElemento');
+    if (fotoNuevoInput) {
+        fotoNuevoInput.addEventListener('change', function () {
+            const preview = document.getElementById('fotoNuevoPreview');
+            const placeholder = document.getElementById('fotoNuevoPlaceholder');
+            const file = this.files && this.files[0];
+            if (file && file.type.indexOf('image/') === 0 && preview) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    preview.hidden = false;
+                    if (placeholder) {
+                        placeholder.hidden = true;
+                    }
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+            resetFotoNuevo();
+        });
+    }
 
     document.getElementById('modalElemento').addEventListener('hidden.bs.modal', function () {
         mostrarPanelBuscar();

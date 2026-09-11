@@ -49,15 +49,18 @@
             <button onclick="window.print()" class="btn btn-primary">
                 <i class="bi bi-printer"></i> Imprimir PDF
             </button>
-            <a href="<?= $config['base_url'] ?>/movimientos" class="btn btn-outline-secondary">
+            <button type="button" class="btn btn-outline-secondary" onclick="if (window.opener) { window.close(); } else { location.href='<?= $config['base_url'] ?>/movimientos'; }">
                 <i class="bi bi-arrow-left"></i> Volver
-            </a>
+            </button>
         </div>
 
         <div class="document-header">
             <h1 class="document-title"><?= htmlspecialchars($config['name'] ?? '') ?></h1>
             <p class="document-subtitle">Sistema de Gestión de Inventario</p>
-            <h2 class="document-number">Documento de Dar de Baja #<?= $movimiento['Consecutivo'] ?></h2>
+            <h2 class="document-number">
+                <?= !empty($esConsumo) ? 'Documento de Consumo #' : 'Documento de Dar de Baja #' ?>
+                <?= $movimiento['Consecutivo'] ?>
+            </h2>
         </div>
 
         <div class="row mb-5">
@@ -90,7 +93,7 @@
             </div>
         <?php endif; ?>
 
-        <h5 class="mb-3">Elementos dados de baja:</h5>
+        <h5 class="mb-3"><?= !empty($esConsumo) ? 'Elementos consumidos:' : 'Elementos dados de baja:' ?></h5>
         <table class="table table-bordered table-document">
             <thead>
                 <tr>

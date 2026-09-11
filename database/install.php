@@ -95,7 +95,7 @@ $pdo->exec(
 $pdo->exec(
     'CREATE TABLE IF NOT EXISTS ' . $t('Movimientos') . " (
         id_movimiento INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-        Tipo ENUM('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja') NOT NULL,
+        Tipo ENUM('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'Consumo') NOT NULL,
         Consecutivo INT NOT NULL,
         Fecha DATE NOT NULL,
         Cedula_cuentadante VARCHAR(20) CHARACTER SET {$charset} COLLATE {$collation} DEFAULT NULL,
@@ -285,7 +285,7 @@ function seedIfEmpty(PDO $pdo, callable $t): void
     echo "Insertando datos iniciales...\n";
     $hash = password_hash('123456', PASSWORD_DEFAULT);
 
-    $pdo->exec('INSERT INTO ' . $t('Categorias') . " (Nombre, Estado) VALUES ('General', 'Activo')");
+    $pdo->exec('INSERT INTO ' . $t('Categorias') . " (Nombre, Indicador, Estado) VALUES ('General', 'No Consumible', 'Activo')");
 
     $stmt = $pdo->prepare(
         'INSERT INTO ' . $t('Usuarios') . ' (Cedula, Nombres, Password, Tipo, Estado) VALUES (?, ?, ?, ?, ?)'

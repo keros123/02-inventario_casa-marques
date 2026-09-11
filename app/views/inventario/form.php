@@ -78,7 +78,7 @@ if (!$isEdit && $codigoActual === '') {
                             <input type="text" name="codigo" class="form-control"
                                    value="<?= htmlspecialchars($codigoActual) ?>" <?= $isEdit ? 'readonly' : 'required' ?>>
                             <?php if (!$isEdit): ?>
-                            <small class="text-muted">Sugerido: primera letra de la categoría + consecutivo.</small>
+                            <small class="text-muted">Sugerido: tres primeras letras de la categoría + consecutivo.</small>
                             <?php endif; ?>
                         </div>
                         <div class="col-md-4">

@@ -2,6 +2,8 @@
 
 /**
  * Crea el esquema vacío en Supabase (PostgreSQL).
+ * Lee docs/crear_db_supabase.sql e inyecta DB_PREFIX de .env.
+ *
  * Uso: php database/install_supabase.php
  */
 
@@ -18,65 +20,36 @@ if (!Database::isPostgres()) {
     exit(1);
 }
 
-$source = __DIR__ . DIRECTORY_SEPARATOR . 'install_postgres.sql';
-$raw = file_get_contents($source);
-if ($raw === false) {
+$source = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'docs' . DIRECTORY_SEPARATOR . 'crear_db_supabase.sql';
+$sql = file_get_contents($source);
+if ($sql === false) {
     fwrite(STDERR, "No se pudo leer {$source}\n");
     exit(1);
 }
 
-$sql = '';
-foreach (preg_split("/\r\n|\n|\r/", $raw) as $line) {
-    $trim = ltrim($line);
-    if ($trim === '' || str_starts_with($trim, '--')) {
-        continue;
-    }
-    if (str_starts_with($trim, '\\')) {
-        continue;
-    }
-    if (str_contains($trim, 'CREATE DATABASE') || str_contains($trim, '\\gexec')) {
-        continue;
-    }
-    $sql .= $line . "\n";
+$prefix = Database::prefix();
+$replaced = preg_replace(
+    "/prefijo\\s+text\\s+:=\\s+'[^']*'/i",
+    "prefijo text := '" . str_replace("'", "''", $prefix) . "'",
+    $sql,
+    1,
+    $count
+);
+if ($replaced !== null && $count > 0) {
+    $sql = $replaced;
 }
 
 $pdo = Database::getConnection();
 $pdo->exec('SET search_path TO public');
 
-$statements = [];
-$buffer = '';
-$inString = false;
-$length = strlen($sql);
-for ($i = 0; $i < $length; $i++) {
-    $ch = $sql[$i];
-    $buffer .= $ch;
-    if ($ch === "'" && ($i === 0 || $sql[$i - 1] !== '\\')) {
-        $inString = !$inString;
-    }
-    if ($ch === ';' && !$inString) {
-        $stmt = trim($buffer);
-        if ($stmt !== '' && $stmt !== ';') {
-            $statements[] = $stmt;
-        }
-        $buffer = '';
-    }
+try {
+    $pdo->exec($sql);
+} catch (PDOException $e) {
+    fwrite(STDERR, "Error al aplicar el esquema: " . $e->getMessage() . "\n");
+    exit(1);
 }
 
-echo "Aplicando " . count($statements) . " sentencias en Supabase...\n";
-
-foreach ($statements as $index => $statement) {
-    try {
-        $pdo->exec($statement);
-    } catch (PDOException $e) {
-        if (str_contains($e->getMessage(), 'already exists')) {
-            echo "  (" . ($index + 1) . ") ya existía, se omite\n";
-            continue;
-        }
-        fwrite(STDERR, "Error en sentencia " . ($index + 1) . ": " . $e->getMessage() . "\n");
-        exit(1);
-    }
-}
-
-$prefix = Database::prefix();
-echo "Esquema listo. Tablas {$prefix}* en " . Env::get('SUPABASE_DB_HOST') . "\n";
+echo "Esquema listo. Prefijo: {$prefix}\n";
+echo "Tablas en " . Env::get('SUPABASE_DB_HOST') . "\n";
 echo "Usuario: admin / 123456\n";
+echo "Categoría por defecto: General · No Consumible\n";

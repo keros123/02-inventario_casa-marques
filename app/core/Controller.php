@@ -38,6 +38,15 @@ class Controller
         exit;
     }
 
+    protected function redirectAndOpenDocument(string $appPath, string $documentoPath): void
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['abrir_documento'] = $this->config['base_url'] . $documentoPath;
+        $this->redirect($appPath);
+    }
+
     protected function json(array $data, int $code = 200): void
     {
         http_response_code($code);

@@ -2,10 +2,15 @@
 $id = (int) $prestamo['id_movimiento'];
 $descripcion = htmlspecialchars($form['descripcion'] ?? '');
 $pendienteTotal = (int) ($pendienteTotal ?? 0);
+$esConsumo = ($modo ?? '') === 'Consumo';
+$codigoFiltro = trim((string) ($codigoFiltro ?? ''));
+$action = $esConsumo
+    ? $config['base_url'] . '/prestamos/consumo/store'
+    : $config['base_url'] . '/prestamos/dar-de-baja/store';
 ?>
 
 <div class="page-header">
-    <h2 class="page-title">Dar de baja salida #<?= (int) $prestamo['Consecutivo'] ?></h2>
+    <h2 class="page-title"><?= $esConsumo ? 'Consumo' : 'Dar de baja' ?> salida #<?= (int) $prestamo['Consecutivo'] ?></h2>
     <p class="page-subtitle">
         <a href="<?= $config['base_url'] ?>/prestamos" class="text-decoration-none">
             <i class="bi bi-arrow-left"></i> Volver a salidas
@@ -50,12 +55,17 @@ $pendienteTotal = (int) ($pendienteTotal ?? 0);
 
 <div class="card">
     <div class="card-body">
-        <form method="POST" action="<?= $config['base_url'] ?>/prestamos/dar-de-baja/store" id="formDarDeBaja" enctype="multipart/form-data">
+        <form method="POST" action="<?= $action ?>" id="formDarDeBaja" <?= $esConsumo ? '' : 'enctype="multipart/form-data"' ?>>
             <input type="hidden" name="id_movimiento" value="<?= $id ?>">
+            <?php if ($codigoFiltro !== ''): ?>
+            <input type="hidden" name="codigo" value="<?= htmlspecialchars($codigoFiltro) ?>">
+            <?php endif; ?>
 
-            <h5 class="section-title">Elementos a dar de baja</h5>
+            <h5 class="section-title"><?= $esConsumo ? 'Elementos consumidos' : 'Elementos a dar de baja' ?></h5>
             <p class="text-muted small mb-3">
-                Se darán de baja todos los elementos pendientes de la salida.
+                <?= $esConsumo
+                    ? 'Se registrará el consumo de los elementos pendientes seleccionados.'
+                    : 'Se darán de baja los elementos no consumibles pendientes seleccionados.' ?>
             </p>
 
             <div class="table-responsive mb-4">
@@ -67,7 +77,7 @@ $pendienteTotal = (int) ($pendienteTotal ?? 0);
                             <th class="text-center">En salida</th>
                             <th class="text-center">Devuelto</th>
                             <th class="text-center">Pendiente</th>
-                            <th style="width: 140px;">A dar de baja</th>
+                            <th style="width: 140px;"><?= $esConsumo ? 'A consumir' : 'A dar de baja' ?></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -93,6 +103,7 @@ $pendienteTotal = (int) ($pendienteTotal ?? 0);
                 </table>
             </div>
 
+            <?php if (!$esConsumo): ?>
             <div class="mb-4">
                 <label class="form-label">Fotografías de los elementos * (mínimo 1, máximo 3)</label>
                 <input type="file" name="fotos[]" class="form-control" accept="image/*" multiple required
@@ -105,17 +116,25 @@ $pendienteTotal = (int) ($pendienteTotal ?? 0);
                 <textarea name="descripcion" class="form-control" rows="2"
                           placeholder="Observaciones del dado de baja" required><?= $descripcion ?></textarea>
             </div>
+            <?php endif; ?>
 
             <div class="d-flex flex-wrap gap-2">
+                <?php if ($esConsumo): ?>
+                <button type="submit" class="btn btn-warning btn-sm">
+                    <i class="bi bi-check2-circle"></i> Consumido
+                </button>
+                <?php else: ?>
                 <button type="submit" class="btn btn-dar-de-baja btn-sm">
                     <i class="bi bi-x-circle"></i> Dar de baja
                 </button>
-                <a href="<?= $config['base_url'] ?>/prestamos" class="btn btn-outline-secondary btn-sm">Cancelar</a>
+                <?php endif; ?>
+                <a href="<?= $config['base_url'] ?>/prestamos/devolucion?id=<?= $id ?>" class="btn btn-outline-secondary btn-sm">Cancelar</a>
             </div>
         </form>
     </div>
 </div>
 
+<?php if (!$esConsumo): ?>
 <script>
 document.getElementById('formDarDeBaja')?.addEventListener('submit', function (e) {
     const input = document.getElementById('fotosDarBaja');
@@ -131,4 +150,5 @@ document.getElementById('formDarDeBaja')?.addEventListener('submit', function (e
     }
 });
 </script>
+<?php endif; ?>
 

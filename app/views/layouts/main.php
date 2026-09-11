@@ -125,5 +125,21 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="<?= $config['base_url'] ?>/js/app.js"></script>
+    <?php
+    $abrirDocumento = '';
+    if (!empty($_SESSION['abrir_documento'])) {
+        $abrirDocumento = (string) $_SESSION['abrir_documento'];
+        unset($_SESSION['abrir_documento']);
+        $base = rtrim((string) ($config['base_url'] ?? ''), '/');
+        if ($base !== '' && !str_starts_with($abrirDocumento, $base . '/')) {
+            $abrirDocumento = '';
+        }
+    }
+    ?>
+    <?php if ($abrirDocumento !== ''): ?>
+    <script>
+    window.open(<?= json_encode($abrirDocumento, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>, '_blank', 'noopener,noreferrer');
+    </script>
+    <?php endif; ?>
 </body>
 </html>

@@ -21,10 +21,29 @@ class MovimientoModel extends Model
         ], true);
     }
 
+    public static function esConsumo(?string $tipo): bool
+    {
+        if ($tipo === null || trim($tipo) === '') {
+            return false;
+        }
+
+        $normalizado = strtolower(preg_replace('/[\s\-.]+/', '_', trim($tipo)));
+
+        return in_array($normalizado, ['consumo', 'consumido'], true);
+    }
+
+    public static function esCierrePendiente(?string $tipo): bool
+    {
+        return self::esDarDeBaja($tipo) || self::esConsumo($tipo);
+    }
+
     public static function etiquetaTipo(string $tipo): string
     {
         if (self::esDarDeBaja($tipo)) {
             return 'Dar de baja';
+        }
+        if (self::esConsumo($tipo)) {
+            return 'Consumo';
         }
 
         return match ($tipo) {
@@ -68,7 +87,7 @@ class MovimientoModel extends Model
                         'id_categoria' => $nuevo['id_categoria'],
                         'descripcion'  => $nuevo['descripcion'],
                         'cantidad'     => 0,
-                        'fotografia'   => null,
+                        'fotografia'   => $nuevo['fotografia'] ?? null,
                         'estado'       => 'Activo',
                     ]);
                     $linea['codigo'] = $nuevo['codigo'];
@@ -392,9 +411,11 @@ class MovimientoModel extends Model
     public function getLineasPendientes(int $idPrestamo): array
     {
         $stmt = $this->db->prepare(
-            'SELECT d.Codigo_elemento, COALESCE(i.Elemento, \'[Elemento eliminado]\') AS Elemento, d.Cantidad AS prestado
+            'SELECT d.Codigo_elemento, COALESCE(i.Elemento, \'[Elemento eliminado]\') AS Elemento,
+                    d.Cantidad AS prestado, c.Indicador AS Categoria_indicador, c.Nombre AS Categoria
              FROM ' . $this->t('Det_Movimientos') . ' d
              LEFT JOIN ' . $this->t('Inventario') . ' i ON i.Codigo = d.Codigo_elemento
+             LEFT JOIN ' . $this->t('Categorias') . ' c ON c.id_categoria = i.id_categoria
              WHERE d.id_movimiento = :id AND d.Estado = \'Activo\'
              ORDER BY d.id_Detalle'
         );
@@ -416,6 +437,8 @@ class MovimientoModel extends Model
                 'prestado'  => $prestado,
                 'devuelto'  => $devuelto,
                 'pendiente' => $pendiente,
+                'indicador' => $linea['Categoria_indicador'] ?? null,
+                'categoria' => $linea['Categoria'] ?? null,
             ];
         }
 
@@ -558,17 +581,34 @@ class MovimientoModel extends Model
 
     public function registrarDarDeBaja(int $idPrestamo, array $lineas, string $descripcion, array $fotos = []): int
     {
+        return $this->registrarCierrePendiente('Dar_Baja', $idPrestamo, $lineas, $descripcion, $fotos, true);
+    }
+
+    public function registrarConsumo(int $idPrestamo, array $lineas, ?string $descripcion = null): int
+    {
+        return $this->registrarCierrePendiente('Consumo', $idPrestamo, $lineas, $descripcion, [], false);
+    }
+
+    private function registrarCierrePendiente(
+        string $tipo,
+        int $idPrestamo,
+        array $lineas,
+        ?string $descripcion,
+        array $fotos,
+        bool $requiereFotos
+    ): int {
         $prestamo = $this->findPrestamoById($idPrestamo);
         if (!$prestamo) {
             throw new RuntimeException('Salida no encontrada.');
         }
 
-        if (empty($fotos)) {
-            throw new RuntimeException('Debe adjuntar al menos una fotografía del elemento.');
-        }
-
-        if (count($fotos) > 3) {
-            throw new RuntimeException('Máximo 3 fotografías permitidas.');
+        if ($requiereFotos) {
+            if (empty($fotos)) {
+                throw new RuntimeException('Debe adjuntar al menos una fotografía del elemento.');
+            }
+            if (count($fotos) > 3) {
+                throw new RuntimeException('Máximo 3 fotografías permitidas.');
+            }
         }
 
         $pendientes = $this->getLineasPendientes($idPrestamo);
@@ -591,21 +631,24 @@ class MovimientoModel extends Model
             }
             if ($cantidad > $maxPendiente) {
                 throw new RuntimeException(
-                    'Cantidad a dar de baja excede lo pendiente para ' . $codigo
-                    . '. Pendiente: ' . $maxPendiente
+                    'La cantidad excede lo pendiente para ' . $codigo . '. Pendiente: ' . $maxPendiente
                 );
             }
             $lineasValidas[] = ['codigo' => $codigo, 'cantidad' => $cantidad];
         }
 
         if (empty($lineasValidas)) {
-            throw new RuntimeException('Debe indicar al menos una cantidad a dar de baja.');
+            throw new RuntimeException(
+                $tipo === 'Consumo'
+                    ? 'Debe indicar al menos una cantidad a marcar como consumida.'
+                    : 'Debe indicar al menos una cantidad a dar de baja.'
+            );
         }
 
         $this->db->beginTransaction();
 
         try {
-            $idMovimiento = $this->crearMovimiento('Dar_Baja', [
+            $idMovimiento = $this->crearMovimiento($tipo, [
                 'fecha'              => date('Y-m-d'),
                 'cedula_cuentadante' => $prestamo['Cedula_cuentadante'],
                 'descripcion'        => $descripcion,
@@ -616,7 +659,9 @@ class MovimientoModel extends Model
                 $this->crearDetalle($idMovimiento, $index + 1, $linea['codigo'], $linea['cantidad']);
             }
 
-            $this->guardarFotos($idMovimiento, $fotos);
+            if ($requiereFotos) {
+                $this->guardarFotos($idMovimiento, $fotos);
+            }
             $this->sincronizarEstadoPrestamo($idPrestamo);
 
             $this->db->commit();
@@ -634,9 +679,9 @@ class MovimientoModel extends Model
              FROM ' . $this->t('Movimientos') . ' m
              JOIN ' . $this->t('Det_Movimientos') . ' d ON d.id_movimiento = m.id_movimiento AND d.Estado = \'Activo\'
              WHERE (
-                 m.Tipo IN (\'Devolucion\', \'Dar_Baja\')
+                 m.Tipo IN (\'Devolucion\', \'Dar_Baja\', \'Consumo\')
                  OR LOWER(REPLACE(REPLACE(REPLACE(m.Tipo, \' \', \'_\'), \'-\', \'_\'), \'.\', \'\'))
-                    IN (\'dar_baja\', \'dardebaja\', \'darde_baja\', \'dar_de_baja\')
+                    IN (\'dar_baja\', \'dardebaja\', \'darde_baja\', \'dar_de_baja\', \'consumo\', \'consumido\')
                )
                AND m.id_movimiento_ref = :id
                AND m.Estado = \'Activo\'

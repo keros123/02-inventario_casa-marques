@@ -48,14 +48,18 @@ if (is_array($item)) {
                     <div class="form-text">Categoría por defecto del sistema. No se puede renombrar ni eliminar.</div>
                     <?php endif; ?>
                 </div>
-                <div class="col-md-4" id="wrapIndicador" <?= $esDefault ? 'hidden' : '' ?>>
+                <div class="col-md-4" id="wrapIndicador">
                     <label class="form-label">Indicador *</label>
-                    <select name="indicador" id="indicadorCategoria" class="form-select" <?= $esDefault ? 'disabled' : 'required' ?>>
+                    <?php if ($esDefault): ?>
+                    <input type="hidden" name="indicador" value="No Consumible">
+                    <?php endif; ?>
+                    <select <?= $esDefault ? '' : 'name="indicador"' ?> id="indicadorCategoria" class="form-select"
+                            <?= $esDefault ? 'disabled' : 'required' ?>>
                         <option value="">Seleccione…</option>
                         <option value="Consumible" <?= $indicadorActual === 'Consumible' ? 'selected' : '' ?>>Consumible</option>
-                        <option value="No Consumible" <?= $indicadorActual === 'No Consumible' ? 'selected' : '' ?>>No Consumible</option>
+                        <option value="No Consumible" <?= $esDefault || $indicadorActual === 'No Consumible' ? 'selected' : '' ?>>No Consumible</option>
                     </select>
-                    <div class="form-text">Obligatorio en todas las categorías excepto General.</div>
+                    <div class="form-text"><?= $esDefault ? 'General es no consumible y no se puede cambiar.' : 'Obligatorio: Consumible o No Consumible.' ?></div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Estado</label>
@@ -65,12 +69,6 @@ if (is_array($item)) {
                     </select>
                 </div>
             </div>
-
-            <?php if ($esDefault): ?>
-            <p class="text-muted small mt-3 mb-0">
-                La categoría <strong>General</strong> no usa el indicador Consumible / No Consumible.
-            </p>
-            <?php endif; ?>
 
             <div class="mt-4 d-flex gap-2">
                 <button type="submit" class="btn btn-primary">
@@ -93,9 +91,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function toggle() {
         const esGeneral = nombre.value.trim().toLowerCase() === 'general';
-        wrap.hidden = esGeneral;
-        indicador.disabled = esGeneral;
-        indicador.required = !esGeneral;
+        wrap.hidden = false;
+        if (esGeneral) {
+            indicador.value = 'No Consumible';
+            indicador.disabled = true;
+            indicador.required = false;
+            return;
+        }
+        indicador.disabled = false;
+        indicador.required = true;
     }
     nombre.addEventListener('input', toggle);
     toggle();

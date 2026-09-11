@@ -116,6 +116,7 @@ $queryBase = array_filter([
                     <option value="Prestamo" <?= ($f['tipo'] ?? '') === 'Prestamo' ? 'selected' : '' ?>>Salida</option>
                     <option value="Devolucion" <?= ($f['tipo'] ?? '') === 'Devolucion' ? 'selected' : '' ?>>Devolución</option>
                     <option value="Dar_Baja" <?= ($f['tipo'] ?? '') === 'Dar_Baja' ? 'selected' : '' ?>>Dar de baja</option>
+                    <option value="Consumo" <?= ($f['tipo'] ?? '') === 'Consumo' ? 'selected' : '' ?>>Consumo</option>
                 </select>
             </div>
 

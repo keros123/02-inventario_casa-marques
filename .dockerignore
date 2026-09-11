@@ -1,6 +1,7 @@
 .git
 .cursor
 .vscode
+.idea
 .env
 .env.*
 !.env.example
@@ -9,6 +10,13 @@ agent-transcripts
 terminals
 **/__pycache__
 *.log
+.tmp
+tmp
+database/inventario_cm.sql
+database/install_mysql.sql
+database/install_postgres.sql
+app/views/cuentadantes
+app/controllers/CuentadantesController.php
 public/uploads/inventario/*
 !public/uploads/inventario/.gitkeep
 public/uploads/dar-baja/*

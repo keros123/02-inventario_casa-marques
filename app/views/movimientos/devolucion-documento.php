@@ -49,9 +49,9 @@
             <button onclick="window.print()" class="btn btn-primary">
                 <i class="bi bi-printer"></i> Imprimir PDF
             </button>
-            <a href="<?= $config['base_url'] ?>/movimientos" class="btn btn-outline-secondary">
+            <button type="button" class="btn btn-outline-secondary" onclick="if (window.opener) { window.close(); } else { location.href='<?= $config['base_url'] ?>/movimientos'; }">
                 <i class="bi bi-arrow-left"></i> Volver
-            </a>
+            </button>
         </div>
 
         <div class="document-header">

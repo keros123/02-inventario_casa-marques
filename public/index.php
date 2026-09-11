@@ -62,6 +62,9 @@ $router->post('/prestamos/devolucion-total', 'MovimientosController@devolucionTo
 $router->get('/prestamos/dar-de-baja', 'MovimientosController@darDeBaja');
 $router->post('/prestamos/dar-de-baja/store', 'MovimientosController@darDeBajaStore');
 $router->get('/prestamos/dar-de-baja/documento', 'MovimientosController@darDeBajaDocumento');
+$router->get('/prestamos/consumo', 'MovimientosController@consumo');
+$router->post('/prestamos/consumo/store', 'MovimientosController@consumoStore');
+$router->get('/prestamos/consumo/documento', 'MovimientosController@consumoDocumento');
 
 $router->get('/categorias', 'CategoriasController@index');
 $router->get('/categorias/create', 'CategoriasController@create');
@@ -82,13 +85,6 @@ $router->get('/solicitudes/ver', 'SolicitudesController@ver');
 $router->post('/solicitudes/aprobar', 'SolicitudesController@aprobar');
 $router->post('/solicitudes/rechazar', 'SolicitudesController@rechazar');
 $router->post('/solicitudes/cancelar', 'SolicitudesController@cancelar');
-
-$router->get('/cuentadantes', 'CuentadantesController@index');
-$router->get('/cuentadantes/create', 'CuentadantesController@create');
-$router->post('/cuentadantes/store', 'CuentadantesController@store');
-$router->get('/cuentadantes/edit', 'CuentadantesController@edit');
-$router->post('/cuentadantes/update', 'CuentadantesController@update');
-$router->post('/cuentadantes/delete', 'CuentadantesController@delete');
 
 $router->get('/usuarios', 'UsuariosController@index');
 $router->get('/usuarios/create', 'UsuariosController@create');

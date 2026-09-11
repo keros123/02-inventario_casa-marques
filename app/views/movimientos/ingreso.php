@@ -12,7 +12,12 @@ $elementosJson = json_encode(array_map(static function ($el) {
     ];
 }, $elementos), JSON_UNESCAPED_UNICODE);
 $categoriasJson = json_encode($categorias ?? [], JSON_UNESCAPED_UNICODE);
-$siguientesJson = json_encode($siguientesPorCategoria ?? [], JSON_UNESCAPED_UNICODE);
+$siguientesPorCategoria = $siguientesPorCategoria ?? [];
+$siguientesJson = json_encode($siguientesPorCategoria, JSON_UNESCAPED_UNICODE);
+$primeraCatId = !empty($categorias) ? (int) $categorias[0]['id_categoria'] : 0;
+$codigoSugeridoInicial = $primeraCatId > 0
+    ? (string) ($siguientesPorCategoria[$primeraCatId] ?? '')
+    : '';
 ?>
 
 <div class="page-header">
@@ -36,7 +41,7 @@ $siguientesJson = json_encode($siguientesPorCategoria ?? [], JSON_UNESCAPED_UNIC
 
 <div class="card">
     <div class="card-body">
-        <form method="POST" action="<?= $config['base_url'] ?>/movimientos/ingreso/store" id="formIngreso">
+        <form method="POST" action="<?= $config['base_url'] ?>/movimientos/ingreso/store" id="formIngreso" enctype="multipart/form-data">
 
             <h5 class="section-title">Datos del movimiento</h5>
             <div class="row g-3 mb-4">
@@ -187,16 +192,29 @@ $siguientesJson = json_encode($siguientesPorCategoria ?? [], JSON_UNESCAPED_UNIC
                         </div>
                         <div class="col-md-7">
                             <label class="form-label">Código *</label>
-                            <input type="text" id="codigoNuevoElemento" class="form-control">
-                            <small class="text-muted">Sugerido: primera letra de la categoría + consecutivo.</small>
+                            <input type="text" id="codigoNuevoElemento" class="form-control"
+                                   value="<?= htmlspecialchars($codigoSugeridoInicial) ?>">
+                            <small class="text-muted">Sugerido: tres primeras letras de la categoría + consecutivo.</small>
                         </div>
                         <div class="col-md-12">
                             <label class="form-label">Elemento *</label>
                             <input type="text" id="nombreNuevoElemento" class="form-control">
                         </div>
-                        <div class="col-md-7">
+                        <div class="col-md-5">
                             <label class="form-label">Cantidad *</label>
                             <input type="number" id="cantidadNuevoElemento" class="form-control" min="1" value="1">
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label">Fotografía *</label>
+                            <div class="d-flex align-items-start gap-2">
+                                <div class="photo-preview-panel photo-preview-panel-sm" id="fotoNuevoPreviewWrap">
+                                    <img src="" alt="Vista previa" id="fotoNuevoPreview" class="photo-preview" hidden>
+                                    <span id="fotoNuevoPlaceholder" class="photo-preview-empty">
+                                        <i class="bi bi-image"></i>
+                                    </span>
+                                </div>
+                                <input type="file" id="fotografiaNuevoElemento" class="form-control" accept="image/*">
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Descripción</label>

@@ -1,7 +1,30 @@
 .env
 .env.*
 !.env.example
+
+# Uploads locales
 public/uploads/inventario/*
 !public/uploads/inventario/.gitkeep
 public/uploads/dar-baja/*
 !public/uploads/dar-baja/.gitkeep
+
+# Dumps y scripts de BD que no se versionan
+database/inventario_cm.sql
+database/install_mysql.sql
+database/install_postgres.sql
+database/*.dump
+database/*_backup.sql
+*.sql.bak
+
+# Módulo de cuentadantes (reemplazado por usuarios)
+app/views/cuentadantes/
+app/controllers/CuentadantesController.php
+
+# IDE / OS / logs
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
+.tmp/
+tmp/

@@ -133,7 +133,9 @@ class CategoriasController extends Controller
         return [
             'nombre'    => $nombre,
             'estado'    => $_POST['estado'] ?? 'Activo',
-            'indicador' => $esDefault ? null : CategoriaModel::normalizeIndicador($_POST['indicador'] ?? ''),
+            'indicador' => $esDefault
+                ? 'No Consumible'
+                : CategoriaModel::normalizeIndicador($_POST['indicador'] ?? ''),
         ];
     }
 

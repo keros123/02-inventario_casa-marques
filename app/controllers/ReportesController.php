@@ -80,6 +80,7 @@ class ReportesController extends Controller
                     'Prestamo'   => 'Salida',
                     'Devolucion' => 'Devolución',
                     'Dar_Baja'   => 'Dar de baja',
+                    'Consumo'    => 'Consumo',
                     default      => $tipo,
                 };
             };
@@ -118,7 +119,7 @@ class ReportesController extends Controller
             'id_categoria'       => (int) ($_GET['categoria'] ?? 0) ?: null,
             'elemento'           => trim($_GET['elemento'] ?? ''),
             'estado'             => trim($_GET['estado'] ?? ''),
-            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja'], true) ? $tipo : '',
+            'tipo'               => in_array($tipo, ['Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'Consumo'], true) ? $tipo : '',
             'cedula_cuentadante' => trim($_GET['cuentadante'] ?? ''),
             'cantidad_operador'  => in_array($cantidadOperador, ['mayor', 'igual', 'menor'], true) ? $cantidadOperador : '',
             'cantidad_valor'     => $cantidadValor !== '' ? (int) $cantidadValor : null,

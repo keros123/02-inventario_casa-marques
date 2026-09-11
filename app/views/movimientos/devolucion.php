@@ -74,6 +74,7 @@ $estadoActual = $prestamo['Estado'] ?? 'Activo';
                             <th class="text-center">Devuelto</th>
                             <th class="text-center">Pendiente</th>
                             <th style="width: 140px;">A devolver</th>
+                            <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -92,6 +93,21 @@ $estadoActual = $prestamo['Estado'] ?? 'Activo';
                                        class="form-control form-control-sm linea-devolver"
                                        min="0" max="<?= (int) $linea['pendiente'] ?>"
                                        value="0" data-pendiente="<?= (int) $linea['pendiente'] ?>">
+                            </td>
+                            <td class="text-end">
+                                <?php if ((int) $linea['pendiente'] > 0): ?>
+                                    <?php if (CategoriaModel::esConsumible($linea['categoria'] ?? '', $linea['indicador'] ?? null)): ?>
+                                    <a href="<?= $config['base_url'] ?>/prestamos/consumo?id=<?= $id ?>&codigo=<?= urlencode($linea['codigo']) ?>"
+                                       class="btn btn-warning btn-sm">
+                                        Consumido
+                                    </a>
+                                    <?php else: ?>
+                                    <a href="<?= $config['base_url'] ?>/prestamos/dar-de-baja?id=<?= $id ?>&codigo=<?= urlencode($linea['codigo']) ?>"
+                                       class="btn btn-dar-de-baja btn-sm">
+                                        Dar_Baja
+                                    </a>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>

@@ -18,6 +18,18 @@ class Migrator
             error_log('Migrator::ensureCategoriaIndicador — ' . $e->getMessage());
         }
 
+        try {
+            self::ensureGeneralNoConsumible($db);
+        } catch (Throwable $e) {
+            error_log('Migrator::ensureGeneralNoConsumible — ' . $e->getMessage());
+        }
+
+        try {
+            self::ensureMovimientoTipoConsumo($db);
+        } catch (Throwable $e) {
+            error_log('Migrator::ensureMovimientoTipoConsumo — ' . $e->getMessage());
+        }
+
         if (Database::isPostgres()) {
             return;
         }
@@ -173,7 +185,7 @@ class Migrator
 
         $count = (int) $db->query('SELECT COUNT(*) FROM ' . self::t('Categorias'))->fetchColumn();
         if ($count === 0) {
-            $db->exec('INSERT INTO ' . self::t('Categorias') . " (Nombre, Estado) VALUES ('General', 'Activo')");
+            $db->exec('INSERT INTO ' . self::t('Categorias') . " (Nombre, Indicador, Estado) VALUES ('General', 'No Consumible', 'Activo')");
         }
     }
 
@@ -230,6 +242,57 @@ class Migrator
         );
     }
 
+    private static function ensureMovimientoTipoConsumo(PDO $db): void
+    {
+        if (!self::tableExists($db, 'Movimientos')) {
+            return;
+        }
+
+        if (Database::isPostgres()) {
+            $tableName = self::n('Movimientos');
+            $stmt = $db->prepare(
+                "SELECT c.conname, pg_get_constraintdef(c.oid) AS def
+                 FROM pg_constraint c
+                 JOIN pg_class t ON t.oid = c.conrelid
+                 JOIN pg_namespace n ON n.oid = t.relnamespace
+                 WHERE c.contype = 'c'
+                   AND n.nspname = current_schema()
+                   AND t.relname = :tabla
+                   AND pg_get_constraintdef(c.oid) ILIKE '%Tipo%'"
+            );
+            $stmt->execute(['tabla' => $tableName]);
+            $constraints = $stmt->fetchAll();
+            foreach ($constraints as $row) {
+                if (stripos((string) ($row['def'] ?? ''), 'Consumo') !== false) {
+                    return;
+                }
+            }
+            foreach ($constraints as $row) {
+                $db->exec(
+                    'ALTER TABLE ' . self::t('Movimientos')
+                    . ' DROP CONSTRAINT IF EXISTS ' . Database::quoteIdent((string) $row['conname'])
+                );
+            }
+            $db->exec(
+                'ALTER TABLE ' . self::t('Movimientos')
+                . ' ADD CONSTRAINT ' . Database::quoteIdent('mov_tipo_chk')
+                . " CHECK (\"Tipo\" IN ('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'Consumo'))"
+            );
+            return;
+        }
+
+        $col = $db->query('SHOW COLUMNS FROM ' . self::t('Movimientos') . " LIKE 'Tipo'")->fetch();
+        $type = (string) ($col['Type'] ?? '');
+        if (stripos($type, 'Consumo') !== false) {
+            return;
+        }
+
+        $db->exec(
+            'ALTER TABLE ' . self::t('Movimientos') . " MODIFY COLUMN Tipo
+             ENUM('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'Consumo') NOT NULL"
+        );
+    }
+
     private static function normalizeDarBajaTipos(PDO $db): void
     {
         if (!self::tableExists($db, 'Movimientos')) {
@@ -238,7 +301,7 @@ class Migrator
 
         $db->exec(
             'ALTER TABLE ' . self::t('Movimientos') . " MODIFY COLUMN Tipo
-             ENUM('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja') NOT NULL"
+             ENUM('Ingreso', 'Prestamo', 'Devolucion', 'Dar_Baja', 'Consumo') NOT NULL"
         );
 
         $db->exec(
@@ -285,6 +348,25 @@ class Migrator
             'ALTER TABLE ' . self::t('Categorias')
             . ' ADD COLUMN Indicador VARCHAR(20) NULL DEFAULT NULL AFTER Nombre'
         );
+    }
+
+    private static function ensureGeneralNoConsumible(PDO $db): void
+    {
+        if (!self::tableExists($db, 'Categorias') || !self::columnExists($db, 'Categorias', 'Indicador')) {
+            return;
+        }
+
+        $stmt = $db->prepare(
+            'UPDATE ' . self::t('Categorias')
+            . ' SET Indicador = :indicador'
+            . ' WHERE LOWER(Nombre) = LOWER(:nombre)'
+            . ' AND (Indicador IS NULL OR Indicador <> :actual)'
+        );
+        $stmt->execute([
+            'indicador' => 'No Consumible',
+            'actual'    => 'No Consumible',
+            'nombre'    => 'General',
+        ]);
     }
 
     private static function columnExists(PDO $db, string $table, string $column): bool

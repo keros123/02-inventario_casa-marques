@@ -82,7 +82,8 @@ class InventarioController extends Controller
 
         $this->json([
             'codigo'      => $codigo,
-            'letra'       => InventarioModel::letraCategoria((string) ($categoria['Nombre'] ?? '')),
+            'letra'       => InventarioModel::prefijoCategoria((string) ($categoria['Nombre'] ?? '')),
+            'prefijo'     => InventarioModel::prefijoCategoria((string) ($categoria['Nombre'] ?? '')),
             'categoria'   => (int) $categoria['id_categoria'],
         ]);
     }

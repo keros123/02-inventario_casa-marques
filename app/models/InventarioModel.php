@@ -68,19 +68,28 @@ class InventarioModel extends Model
         return $grouped;
     }
 
-    public static function letraCategoria(string $nombre): string
+    public static function prefijoCategoria(string $nombre): string
     {
         $nombre = trim($nombre);
-        if ($nombre === '') {
-            return 'X';
+        $map = [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+        ];
+        $letras = '';
+        $len = mb_strlen($nombre, 'UTF-8');
+        for ($i = 0; $i < $len && strlen($letras) < 3; $i++) {
+            $ch = mb_strtoupper(mb_substr($nombre, $i, 1, 'UTF-8'), 'UTF-8');
+            $ch = strtr($ch, $map);
+            if (preg_match('/^[A-Z]$/', $ch)) {
+                $letras .= $ch;
+            }
         }
 
-        $letra = mb_strtoupper(mb_substr($nombre, 0, 1, 'UTF-8'), 'UTF-8');
-        $letra = strtr($letra, [
-            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
-        ]);
+        return $letras !== '' ? str_pad($letras, 3, 'X') : 'XXX';
+    }
 
-        return preg_match('/^[A-Z]$/', $letra) ? $letra : 'X';
+    public static function letraCategoria(string $nombre): string
+    {
+        return self::prefijoCategoria($nombre);
     }
 
     public function getSiguientesCodigos(array $categorias, array $reservados = []): array
@@ -99,7 +108,7 @@ class InventarioModel extends Model
 
     public function suggestNextCodigo(int $categoriaId, string $nombreCategoria, array $reservados = []): string
     {
-        $letra = self::letraCategoria($nombreCategoria);
+        $prefijo = self::prefijoCategoria($nombreCategoria);
         $usados = [];
         $max = 0;
         $width = 5;
@@ -113,7 +122,7 @@ class InventarioModel extends Model
             if ((int) ($row['id_categoria'] ?? 0) !== $categoriaId) {
                 continue;
             }
-            if (preg_match('/^' . preg_quote($letra, '/') . '(\d+)$/', $codigo, $m)) {
+            if (preg_match('/^[A-Z]+(\d+)$/', $codigo, $m)) {
                 $max = max($max, (int) $m[1]);
                 $width = max($width, strlen($m[1]));
             }
@@ -128,7 +137,7 @@ class InventarioModel extends Model
 
         $n = $max + 1;
         do {
-            $codigo = $letra . str_pad((string) $n, $width, '0', STR_PAD_LEFT);
+            $codigo = $prefijo . str_pad((string) $n, $width, '0', STR_PAD_LEFT);
             $n++;
         } while (isset($usados[strtoupper($codigo)]));
 

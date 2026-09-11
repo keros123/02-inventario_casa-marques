@@ -48,19 +48,13 @@ $baseUrl = $config['base_url'];
 
         <p class="page-subtitle">
 
-            <?= $puedeCrear
-
-                ? 'Calendario de solicitudes. Doble clic en un día para crear una nueva solicitud.'
-
-                : 'Calendario de solicitudes de salida' ?>
+            Calendario de solicitudes. Doble clic en un día para crear una nueva solicitud.
 
         </p>
 
     </div>
 
     <div class="d-flex flex-wrap gap-2">
-
-        <?php if ($puedeCrear): ?>
 
         <a href="<?= $baseUrl ?>/solicitudes/nueva" class="btn btn-primary btn-sm">
 
@@ -74,7 +68,7 @@ $baseUrl = $config['base_url'];
 
         </a>
 
-        <?php elseif (Auth::isAdmin()): ?>
+        <?php if (Auth::isAdmin()): ?>
 
         <a href="<?= $baseUrl ?>/solicitudes/pendientes" class="btn btn-warning btn-sm">
 

@@ -410,6 +410,22 @@ a .stat-card {
     display: block;
 }
 
+.photo-preview-panel-sm {
+    min-height: 88px;
+    max-height: 100px;
+    min-width: 88px;
+    flex-shrink: 0;
+}
+
+.photo-preview-panel-sm .photo-preview {
+    max-height: 84px;
+}
+
+.photo-preview-panel-sm .photo-preview-empty {
+    min-height: 72px;
+    font-size: 1.35rem;
+}
+
 .photo-thumb-wrap,
 .photo-thumb-placeholder {
     display: inline-flex;

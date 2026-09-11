@@ -1,7 +1,7 @@
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
         <h2 class="page-title">Categorías</h2>
-        <p class="page-subtitle">Clasificación de elementos. Las categorías (salvo General) indican si son consumibles.</p>
+        <p class="page-subtitle">Clasificación de elementos. General es no consumible; las demás indican si son de consumo.</p>
     </div>
     <a href="<?= $config['base_url'] ?>/categorias/create" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-lg"></i> Nueva categoría
@@ -35,7 +35,7 @@
                 <?php foreach ($items as $item): ?>
                 <?php
                 $esDefault = CategoriaModel::isDefault($item);
-                $indicador = trim((string) ($item['Indicador'] ?? ''));
+                $indicador = CategoriaModel::indicadorEfectivo($item['Nombre'] ?? '', $item['Indicador'] ?? null);
                 ?>
                 <tr>
                     <td>
@@ -45,9 +45,7 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($esDefault): ?>
-                        <span class="text-muted">—</span>
-                        <?php elseif ($indicador === 'Consumible'): ?>
+                        <?php if ($indicador === 'Consumible'): ?>
                         <span class="badge bg-warning text-dark">Consumible</span>
                         <?php elseif ($indicador === 'No Consumible'): ?>
                         <span class="badge bg-info">No Consumible</span>

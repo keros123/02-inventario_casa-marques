@@ -17,14 +17,27 @@ class CategoriaModel extends Model
         return self::isDefaultNombre((string) ($cat['Nombre'] ?? $cat['nombre'] ?? ''));
     }
 
+    public static function indicadorEfectivo(?string $nombre, ?string $indicador = null): ?string
+    {
+        if (self::isDefaultNombre((string) $nombre)) {
+            return 'No Consumible';
+        }
+        return self::normalizeIndicador($indicador);
+    }
+
+    public static function esConsumible(?string $nombre, ?string $indicador = null): bool
+    {
+        return self::indicadorEfectivo($nombre, $indicador) === 'Consumible';
+    }
+
     public static function formatLabel(?string $nombre, ?string $indicador = null): string
     {
         $nombre = trim((string) $nombre);
         if ($nombre === '') {
             return 'Sin categoría';
         }
-        $indicador = trim((string) $indicador);
-        if ($indicador === '' || self::isDefaultNombre($nombre)) {
+        $indicador = self::indicadorEfectivo($nombre, $indicador);
+        if ($indicador === null || $indicador === '') {
             return $nombre;
         }
         return $nombre . ' · ' . $indicador;
@@ -91,7 +104,9 @@ class CategoriaModel extends Model
                 $this->update((int) $row['id_categoria'], [
                     'nombre'     => $row['Nombre'],
                     'estado'     => 'Activo',
-                    'indicador'  => self::isDefault($row) ? null : ($row['Indicador'] ?? $indicador),
+                    'indicador'  => self::isDefault($row)
+                        ? 'No Consumible'
+                        : ($row['Indicador'] ?? $indicador),
                 ]);
                 $row = $this->findByNombre($nombre);
             }
@@ -101,7 +116,7 @@ class CategoriaModel extends Model
         $this->create([
             'nombre'    => $nombre,
             'estado'    => 'Activo',
-            'indicador' => self::isDefaultNombre($nombre) ? null : $indicador,
+            'indicador' => self::isDefaultNombre($nombre) ? 'No Consumible' : $indicador,
         ]);
         return $this->findByNombre($nombre);
     }
@@ -121,7 +136,9 @@ class CategoriaModel extends Model
         );
         return $stmt->execute([
             'nombre'    => $data['nombre'],
-            'indicador' => self::isDefaultNombre((string) $data['nombre']) ? null : ($data['indicador'] ?? null),
+            'indicador' => self::isDefaultNombre((string) $data['nombre'])
+                ? 'No Consumible'
+                : ($data['indicador'] ?? null),
             'estado'    => $data['estado'] ?? 'Activo',
         ]);
     }
@@ -135,7 +152,9 @@ class CategoriaModel extends Model
         $nombre = (string) $data['nombre'];
         return $stmt->execute([
             'nombre'    => $nombre,
-            'indicador' => self::isDefaultNombre($nombre) ? null : ($data['indicador'] ?? null),
+            'indicador' => self::isDefaultNombre($nombre)
+                ? 'No Consumible'
+                : ($data['indicador'] ?? null),
             'estado'    => $data['estado'],
             'id'        => $id,
         ]);
